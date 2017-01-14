@@ -364,6 +364,24 @@ static int iscsi_target_do_tx_login_io(struct iscsi_conn *conn, struct iscsi_log
 	mutex_unlock(&sess->cmdsn_mutex);
 
 	return 0;
+
+err:
+	if (login->login_complete) {
+		if (conn->rx_thread && conn->rx_thread_active) {
+			send_sig(SIGINT, conn->rx_thread, 1);
+			complete(&conn->rx_login_comp);
+			kthread_stop(conn->rx_thread);
+		}
+		if (conn->tx_thread && conn->tx_thread_active) {
+			send_sig(SIGINT, conn->tx_thread, 1);
+			kthread_stop(conn->tx_thread);
+		}
+		spin_lock(&iscsit_global->ts_bitmap_lock);
+		bitmap_release_region(iscsit_global->ts_bitmap, conn->bitmap_id,
+				      get_order(1));
+		spin_unlock(&iscsit_global->ts_bitmap_lock);
+	}
+	return -1;
 }
 
 static int iscsi_target_do_login_io(struct iscsi_conn *conn, struct iscsi_login *login)
