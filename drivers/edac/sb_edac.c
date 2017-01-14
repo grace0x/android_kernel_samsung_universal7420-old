@@ -270,8 +270,9 @@ static const u32 correrrthrsld[] = {
  * sbridge structs
  */
 
-#define NUM_CHANNELS	4
-#define MAX_DIMMS	3		/* Max DIMMS per channel */
+#define NUM_CHANNELS		4
+#define MAX_DIMMS		3	/* Max DIMMS per channel */
+#define CHANNEL_UNSPECIFIED	0xf	/* Intel IA32 SDM 15-14 */
 
 struct sbridge_info {
 	u32	mcmtr;
@@ -1451,6 +1452,9 @@ static void sbridge_mce_output_error(struct mem_ctl_info *mci,
 
 	/* FIXME: need support for channel mask */
 
+	if (channel == CHANNEL_UNSPECIFIED)
+		channel = -1;
+
 	/* Call the helper to output message */
 	edac_mc_handle_error(tp_event, mci, core_err_cnt,
 			     m->addr >> PAGE_SHIFT, m->addr & ~PAGE_MASK, 0,
@@ -1532,7 +1536,7 @@ static int sbridge_mce_check_error(struct notifier_block *nb, unsigned long val,
 
 	mci = get_mci_for_node_id(mce->socketid);
 	if (!mci)
-		return NOTIFY_BAD;
+		return NOTIFY_DONE;
 	pvt = mci->pvt_info;
 
 	/*
