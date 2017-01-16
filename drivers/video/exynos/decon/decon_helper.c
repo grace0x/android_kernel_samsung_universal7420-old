@@ -19,7 +19,6 @@
 #include "dsim.h"
 #include "./vpp/vpp_core.h"
 #include "decon_helper.h"
-#include "./panels/lcd_ctrl.h"
 #include <video/mipi_display.h>
 
 int decon_clk_set_parent(struct device *dev, const char *child, const char *parent)

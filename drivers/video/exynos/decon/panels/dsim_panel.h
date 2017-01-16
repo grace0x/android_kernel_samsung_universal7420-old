@@ -32,4 +32,10 @@ void lcd_init_sysfs(struct dsim_device *dsim);
 int hmt_set_mode(struct dsim_device *dsim, bool wakeup);
 #endif
 
+#ifdef CONFIG_LCD_DOZE_MODE
+#define UNSUPPORT_ALPM					0
+#define SUPPORT_30HZALPM				1
+#define SUPPORT_1HZALPM					2
+#endif
+
 #endif

@@ -33,19 +33,18 @@ struct lcd_seq_info
 #define POWER_IS_ON(pwr)			(pwr <= FB_BLANK_NORMAL)
 
 #define AUTOBRIGHTNESS_LEVEL		12
-#define LEVEL_IS_HBM(level)			(level >= AUTOBRIGHTNESS_LEVEL)
-#define LEVEL_IS_HBM_AREA(level)	((level >= 6) && (level < AUTOBRIGHTNESS_LEVEL))
+#define LEVEL_IS_HBM(brightness)	(brightness == EXTEND_BRIGHTNESS)
 
 #define UNDER_MINUS_20(temperature)	(temperature <= -20)
 #define UNDER_0(temperature)	(temperature <= 0)
 
-#define ACL_IS_ON(nit) 				(nit < 420)
 #define CAPS_IS_ON(level)	(level >= 41)
 
 #define NORMAL_TEMPERATURE			25      /* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS 			365
 #define UI_MAX_BRIGHTNESS 			255
 #define UI_MIN_BRIGHTNESS 			0
-#define UI_DEFAULT_BRIGHTNESS 		134
+#define UI_DEFAULT_BRIGHTNESS 		128
 
 #ifdef CONFIG_LCD_HMT
 #define DEFAULT_HMT_BRIGHTNESS			162
@@ -60,14 +59,14 @@ enum
         HBM_STATUS_MAX,
 };
 
-enum 
+enum
 {
 	ACL_STATUS_OFF,
 	ACL_STATUS_ON,
 	ACL_STATUS_MAX
 };
 
-enum 
+enum
 {
 	ACL_OPR_OFF,
 	ACL_OPR_8P,
@@ -236,7 +235,6 @@ static const unsigned char SEQ_HBM_ON[] = {
 #define S6E3HA2_HBM_BRIGHTNESS	600
 
 #define S6E3HA2_HBM_ELVSS_INDEX		21
-#define S6E3HA2_HBM_ELVSS_COMP		0x06
 
 #define S6E3HA2_ELVSS_CMD_CNT				3
 #define S6E3HA2_ELVSS_REG					0xB6
@@ -251,7 +249,6 @@ static const unsigned char SEQ_HBM_ON[] = {
 
 #define S6E3HA2_VINT_REG2					0x8B
 
-#define S6E3HA2_HBM_INDEX					73
 
 static const unsigned char S6E3HA2_SEQ_SINGLE_DSI_1[] = {
         0xF2,
@@ -525,7 +522,6 @@ static const unsigned char SEQ_HMT_AID_REVERSE1[] = {   /* G.Param */
 #define S6E3HA3_HBM_BRIGHTNESS	600
 
 #define S6E3HA3_HBM_ELVSS_INDEX		21
-#define S6E3HA3_HBM_ELVSS_COMP		0x06
 
 #define S6E3HA3_REG_MIC_ADDR 	0xF9
 #define S6E3HA3_REG_MIC_LEN		1
@@ -803,7 +799,6 @@ static const unsigned char SEQ_MCD_OFF_SET4[] = {
 #define S6E3HF3_HBM_BRIGHTNESS	600
 
 #define S6E3HF3_HBM_ELVSS_INDEX		21
-#define S6E3HF3_HBM_ELVSS_COMP		0x06
 
 /*
 static const unsigned char S6E3HF3_VINT_TABLE[] = {

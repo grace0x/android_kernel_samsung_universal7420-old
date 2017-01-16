@@ -1,14 +1,7 @@
 #ifndef __MDNIE_H__
 #define __MDNIE_H__
 
-#define END_SEQ	0xffff
-
-
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 typedef u8 mdnie_t;
-#else
-typedef u16 mdnie_t;
-#endif
 
 enum MODE {
 	DYNAMIC,
@@ -33,7 +26,7 @@ enum SCENARIO {
 	HMT_16_MODE,
 	SCENARIO_MAX,
 	DMB_NORMAL_MODE = 20,
-	DMB_MODE_MAX,
+	DMB_MODE_MAX
 };
 
 enum BYPASS {
@@ -55,16 +48,9 @@ enum ACCESSIBILITY {
 
 enum HBM {
 	HBM_OFF,
-#if defined(CONFIG_PANEL_S6E3HA3_DYNAMIC) || defined(CONFIG_PANEL_S6E3HF3_DYNAMIC)
-	HBM_ON,
-	HBM_AOLCE_1 = HBM_ON,
-	HBM_AOLCE_2,
-	HBM_AOLCE_3,
-#else
 	HBM_ON,
 	HBM_ON_TEXT,
-#endif
-	HBM_MAX,
+	HBM_MAX
 };
 
 enum hmt_mode {
@@ -74,7 +60,13 @@ enum hmt_mode {
 	HMT_4000K,
 	HMT_6400K,
 	HMT_7500K,
-	HMT_MDNIE_MAX,
+	HMT_MDNIE_MAX
+};
+
+enum NIGHT_MODE {
+	NIGHT_MODE_OFF,
+	NIGHT_MODE_ON,
+	NIGHT_MODE_MAX
 };
 
 struct mdnie_seq_info {
@@ -103,6 +95,11 @@ struct mdnie_trans_info {
 	u32 enable;
 };
 
+struct mdnie_night_info {
+	u32 index_max_num;
+	u32 index_size;
+};
+
 struct mdnie_tune {
 	struct mdnie_table	*bypass_table;
 	struct mdnie_table	*accessibility_table;
@@ -110,11 +107,15 @@ struct mdnie_tune {
 	struct mdnie_table	*hmt_table;
 	struct mdnie_table	(*main_table)[MODE_MAX];
 	struct mdnie_table	*dmb_table;
+	struct mdnie_table	*night_table;
 
 	struct mdnie_scr_info	*scr_info;
 	struct mdnie_trans_info	*trans_info;
+	struct mdnie_night_info	*night_info;
 	unsigned char **coordinate_table;
 	unsigned char **adjust_ldu_rgb_table;
+	unsigned char *night_mode_table;
+	int (*get_hbm_index)(int);
 	int (*color_offset[])(int, int);
 };
 
@@ -137,18 +138,18 @@ struct mdnie_info {
 
 	unsigned int		enable;
 
-	struct mdnie_tune 	*tune;
+	struct mdnie_tune	*tune;
 
 	enum SCENARIO		scenario;
 	enum MODE		mode;
 	enum BYPASS		bypass;
 	enum HBM		hbm;
-	enum hmt_mode	hmt_mode;
+	enum hmt_mode		hmt_mode;
+	enum NIGHT_MODE		night_mode;
 
 	unsigned int		tuning;
 	unsigned int		accessibility;
 	unsigned int		color_correction;
-	unsigned int		auto_brightness;
 
 	char			path[50];
 
@@ -162,6 +163,7 @@ struct mdnie_info {
 	unsigned int white_g;
 	unsigned int white_b;
 	unsigned int disable_trans_dimming;
+	unsigned int night_mode_level;
 
 	struct mdnie_table table_buffer;
 	mdnie_t sequence_buffer[256];
@@ -183,12 +185,14 @@ extern void decon_mdnie_stop(struct mdnie_info *mdnie);
 extern void decon_mdnie_frame_update(struct mdnie_info *mdnie, u32 xres, u32 yres);
 extern u32 decon_mdnie_input_read(void);
 #elif defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, u16 *coordinate, struct mdnie_tune *tune);
+extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned int *coordinate, struct mdnie_tune *tune);
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_DUAL_DISPLAY) && defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 extern int mdnie2_register(struct device *p, void *data, mdnie_w w, mdnie_r r);
 #endif
 extern uintptr_t mdnie_request_table(char *path, struct mdnie_table *s);
+extern ssize_t attr_store_for_each(struct class *cls, const char *name, const char *buf, size_t size);
+extern struct class *get_mdnie_class(void);
 
 #endif /* __MDNIE_H__ */

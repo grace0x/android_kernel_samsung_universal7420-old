@@ -82,6 +82,14 @@ enum dsim_state {
 	DSIM_STATE_SUSPEND	/* DSIM is suspend state */
 };
 
+#ifdef CONFIG_LCD_DOZE_MODE
+enum dsim_doze_mode {
+	DSIM_DOZE_STATE_NORMAL = 0,
+	DSIM_DOZE_STATE_DOZE,
+	DSIM_DOZE_STATE_SUSPEND,
+	DSIM_DOZE_STATE_DOZE_SUSPEND,
+};
+#endif
 struct dsim_resources {
 	struct clk *pclk;
 	struct clk *dphy_esc;
@@ -108,9 +116,6 @@ struct panel_private {
 	unsigned char date[7];
 	unsigned int lcdConnected;
 	unsigned int state;
-	unsigned int auto_brightness;
-	unsigned int auto_brightness_level;
-	unsigned int brightness_step;
 	unsigned int br_index;
 	unsigned int acl_enable;
 	unsigned int caps_enable;
@@ -120,13 +125,11 @@ struct panel_private {
 	unsigned int siop_enable;
 #ifdef CONFIG_LCD_BURNIN_CORRECTION
 	unsigned char ldu_correction_state;
-	unsigned int *ldu_tbl[8];			// 0 : default, 1 : ldu comp
 #endif
 	void *dim_data;
 	void *dim_info;
 	unsigned int *br_tbl;
 	unsigned char *inter_aor_tbl;
-	unsigned int *hbm_inter_br_tbl;
 	unsigned int *gallery_br_tbl;
 	unsigned char **hbm_tbl;
 	unsigned char **acl_cutoff_tbl;
@@ -159,17 +162,28 @@ struct panel_private {
 	unsigned char prev_VT[2];
 	unsigned char alpm_support;			// because zero2 use 2panel(ha2, hf3)
 #endif
-	unsigned int interpolation;
-	char hbm_elvss_comp;
-	unsigned char hbm_elvss;
-	unsigned int hbm_index;
 
-	/* hbm interpolation for color weakness */
-	unsigned int weakness_hbm_comp;
+#ifdef CONFIG_LCD_DOZE_MODE
+	unsigned int 	alpm_support;	// 0 : unsupport, 1 : 30hz, 2 : 1hz
+	unsigned int	hlpm_support;	// 0 : unsupport, 1 : 30hz
+	unsigned int alpm_mode;
+	unsigned int curr_alpm_mode;
+#endif
+	unsigned int interpolation;
+	unsigned char hbm_elvss;
+
 	int is_br_override;
 	int override_br_value;
 
 	int esd_disable;
+
+	unsigned int accessibility;
+	unsigned int adaptive_control;
+	struct class *mdnie_class;
+	int lux;
+#ifdef CONFIG_CHECK_OCTA_CHIP_ID
+	unsigned char octa_id[25];
+#endif
 };
 
 struct dsim_panel_ops {
@@ -179,10 +193,15 @@ struct dsim_panel_ops {
 	int	(*exit)(struct dsim_device *dsim);
 	int	(*init)(struct dsim_device *dsim);
 	int (*dump)(struct dsim_device *dsim);
+#ifdef CONFIG_LCD_DOZE_MODE
+	int (*enteralpm)(struct dsim_device *dsim);
+	int (*exitalpm)(struct dsim_device *dsim);
+#endif
 };
 
 struct dsim_device {
 	struct device *dev;
+	void * decon;
 	struct dsim_resources res;
 	unsigned int irq;
 	void __iomem *reg_base;
@@ -222,7 +241,9 @@ struct dsim_device {
 #ifdef CONFIG_LCD_ALPM
 	int 			alpm;
 #endif
-
+#ifdef CONFIG_LCD_DOZE_MODE
+	unsigned int dsim_doze;
+#endif
 };
 
 /**
@@ -240,6 +261,10 @@ struct mipi_dsim_lcd_driver {
 	int	(*displayon)(struct dsim_device *dsim);
 	int	(*resume)(struct dsim_device *dsim);
 	int (*dump)(struct dsim_device *dsim);
+#ifdef CONFIG_LCD_DOZE_MODE
+	int (*enteralpm)(struct dsim_device *dsim);
+	int (*exitalpm)(struct dsim_device *dsim);
+#endif
 };
 
 int dsim_write_data(struct dsim_device *dsim, unsigned int data_id,
@@ -252,7 +277,7 @@ void dsim_pkt_go_ready(struct dsim_device *dsim);
 void dsim_pkt_go_enable(struct dsim_device *dsim, bool enable);
 #endif
 
-#ifdef CONFIG_LCD_ALPM
+#if defined(CONFIG_LCD_ALPM) || defined(CONFIG_LCD_DOZE_MODE)
 #define	ALPM_OFF							0
 #define ALPM_ON							1
 int alpm_set_mode(struct dsim_device *dsim, int enable);
@@ -316,6 +341,13 @@ static inline void dsim_write_mask(u32 id, u32 reg_id, u32 val, u32 mask)
 #define DSIM_IOC_PARTIAL_CMD		_IOW('D', 6, u32)
 #define DSIM_IOC_SET_PORCH		_IOW('D', 7, struct decon_lcd *)
 #define DSIM_IOC_DUMP			_IOW('D', 8, u32)
+
+#define DSIM_REQ_POWER_OFF		0
+#define DSIM_REQ_POWER_ON		1
+#ifdef CONFIG_LCD_DOZE_MODE
+#define DSIM_REQ_DOZE_MODE		2
+#define DSIM_REQ_DOZE_SUSPEND 	3
+#endif
 
 u32 dsim_reg_get_lineval(u32 id);
 u32 dsim_reg_get_hozval(u32 id);

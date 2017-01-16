@@ -28,6 +28,8 @@
 #include "mdnie_lite_table_noble.h"
 #elif defined(CONFIG_PANEL_S6E3HF3_DYNAMIC)
 #include "mdnie_lite_table_zen.h"
+#elif defined(CONFIG_PANEL_S6E3FA3_A8XE)
+#include "mdnie_lite_table_a8xe.h"
 #endif
 #endif
 
@@ -45,7 +47,7 @@ static int mdnie_lite_write_set(struct dsim_device *dsim, struct lcd_seq_info *s
 			}
 		}
 		if (seq[i].sleep)
-			usleep_range(seq[i].sleep * 1000 , seq[i].sleep * 1000);
+			usleep_range(seq[i].sleep * 1000, seq[i].sleep * 1000);
 	}
 	return ret;
 }
@@ -62,7 +64,6 @@ int mdnie_lite_send_seq(struct dsim_device *dsim, struct lcd_seq_info *seq, u32 
 
 	mutex_lock(&panel->lock);
 	ret = mdnie_lite_write_set(dsim, seq, num);
-
 	mutex_unlock(&panel->lock);
 
 	return ret;
@@ -77,9 +78,9 @@ int mdnie_lite_read(struct dsim_device *dsim, u8 addr, u8 *buf, u32 size)
 		dsim_info("%s : panel is not active\n", __func__);
 		return -EIO;
 	}
+
 	mutex_lock(&panel->lock);
 	ret = dsim_read_hl_data(dsim, addr, size, buf);
-
 	mutex_unlock(&panel->lock);
 
 	return ret;
@@ -103,9 +104,6 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 {
 	int ret = 0;
 	struct panel_private *panel = &dsim->priv;
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	u16 coordinate[2] = {0, };
-#endif
 
 	dsim->lcd = lcd_device_register("panel", dsim->dev, &dsim->priv, NULL);
 	if (IS_ERR(dsim->lcd)) {
@@ -126,26 +124,19 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	panel->temperature = NORMAL_TEMPERATURE;
 	panel->acl_enable = 0;
 	panel->current_acl = 0;
-	panel->auto_brightness = 0;
 	panel->siop_enable = 0;
 	panel->current_hbm = 0;
 	panel->current_vint = 0;
+	panel->adaptive_control = ACL_STATUS_ON;
+	panel->lux = -1;
 
-	panel->weakness_hbm_comp = 0;
-	dsim->glide_display_size = 0;
-	panel->auto_brightness_level = 6;
-
-
-#ifdef AID_INTERPOLATION
-	panel->brightness_step = 256;
-#else
-	panel->brightness_step = 65;				// 360
-#endif
-
-	mutex_init(&panel->lock);
 #ifdef CONFIG_EXYNOS_DECON_LCD_MCD
 	panel->mcd_on = 0;
 #endif
+
+	dsim->glide_display_size = 0;
+
+	mutex_init(&panel->lock);
 
 	if (panel->ops->probe) {
 		ret = panel->ops->probe(dsim);
@@ -159,10 +150,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	coordinate[0] = (u16)panel->coordinate[0];
-	coordinate[1] = (u16)panel->coordinate[1];
-	if (panel->mdnie_support)
-		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, coordinate, &tune_info);
+	if (panel->mdnie_support) {
+		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, panel->coordinate, &tune_info);
+		panel->mdnie_class = get_mdnie_class();
+	}
 #endif
 
 probe_err:
@@ -251,6 +242,87 @@ static int dsim_panel_dump(struct dsim_device *dsim)
 
 	return ret;
 }
+#ifdef CONFIG_LCD_DOZE_MODE
+static int dsim_panel_enteralpm(struct dsim_device *dsim)
+{
+	int ret = 0;
+	struct panel_private *panel = &dsim->priv;
+
+	dsim_info("%s was called\n", __func__);
+
+	if (panel->alpm_support == 0) {
+		dsim_info("%s:this panel does not support doze mode\n", __func__);
+		return 0;
+	}
+
+	if (panel->lcdConnected == PANEL_DISCONNEDTED) {
+		dsim_err("%s : %d : panel was not connected\n", __func__, dsim->id);
+		return ret;
+	}
+
+	if (panel->state == PANEL_STATE_SUSPENED) {
+		if (panel->ops->init) {
+			ret = panel->ops->init(dsim);
+			if (ret) {
+				dsim_err("%s : failed to panel init\n", __func__);
+				return ret;
+			}
+		}
+		panel->state = PANEL_STATE_RESUMED;
+	}
+
+	if (panel->ops->enteralpm) {
+		ret = panel->ops->enteralpm(dsim);
+		if (ret) {
+			dsim_err("ERR:%s:failed to enter alpm \n", __func__);
+			return ret;
+		}
+		panel->curr_alpm_mode = panel->alpm_mode;
+	}
+	return ret;
+}
+
+static int dsim_panel_exitalpm(struct dsim_device *dsim)
+{
+	int ret = 0;
+	struct panel_private *panel = &dsim->priv;
+
+	dsim_info("%s was called\n", __func__);
+
+	if (panel->alpm_support == 0) {
+		dsim_info("%s:this panel does not support doze mode\n", __func__);
+		return 0;
+	}
+
+	if (panel->lcdConnected == PANEL_DISCONNEDTED) {
+		dsim_err("%s : %d : panel was not connected\n", __func__, dsim->id);
+		return ret;
+	}
+
+	if (panel->state == PANEL_STATE_SUSPENED) {
+		if (panel->ops->init) {
+			ret = panel->ops->init(dsim);
+			if (ret) {
+				dsim_err("%s : failed to panel init\n", __func__);
+				return ret;
+			}
+		}
+		panel->state = PANEL_STATE_RESUMED;
+	}
+
+	if (panel->ops->exitalpm) {
+		ret = panel->ops->exitalpm(dsim);
+		if (ret) {
+			dsim_err("ERR:%s:failed to exit alpm \n", __func__);
+			return ret;
+		}
+	}
+
+	panel->curr_alpm_mode = ALPM_OFF;
+	return ret;
+}
+#endif
+
 static struct mipi_dsim_lcd_driver mipi_lcd_driver = {
 	.early_probe = dsim_panel_early_probe,
 	.probe		= dsim_panel_probe,
@@ -258,6 +330,11 @@ static struct mipi_dsim_lcd_driver mipi_lcd_driver = {
 	.suspend	= dsim_panel_suspend,
 	.resume		= dsim_panel_resume,
 	.dump		= dsim_panel_dump,
+#ifdef CONFIG_LCD_DOZE_MODE
+	.enteralpm = dsim_panel_enteralpm,
+	.exitalpm = dsim_panel_exitalpm,
+#endif
+
 };
 
 

@@ -28,7 +28,7 @@
 
 #ifdef CONFIG_PANEL_AID_DIMMING
 
-static unsigned int get_actual_br_value(struct dsim_device *dsim, int index)
+unsigned int get_actual_br_value(struct dsim_device *dsim, int index)
 {
 	struct panel_private *panel = &dsim->priv;
 	struct SmtDimInfo *dimming_info = (struct SmtDimInfo *)panel->dim_info;
@@ -119,84 +119,16 @@ static void dsim_panel_gamma_ctrl(struct dsim_device *dsim)
 
 static char dsim_panel_get_elvssoffset(struct dsim_device *dsim)
 {
-	int nit = 0;
 	char retVal = 0x00;
 	struct panel_private* panel = &(dsim->priv);
-	bool bIsHbm = (LEVEL_IS_HBM(panel->auto_brightness) && (panel->bd->props.brightness == panel->bd->props.max_brightness));
 
-	nit = panel->br_tbl[panel->bd->props.brightness];
+	if(UNDER_MINUS_20(panel->temperature))
+		retVal = HBM_INTER_22TH_OFFSET[panel->br_index][TEMP_UNDER_MINUS_20];
+	else if(UNDER_0(panel->temperature))
+		retVal = HBM_INTER_22TH_OFFSET[panel->br_index][TEMP_UNDER_0];
+	else
+		retVal = HBM_INTER_22TH_OFFSET[panel->br_index][TEMP_ABOVE_0];
 
-	if((!bIsHbm) && (panel->interpolation)) {
-		if(panel->weakness_hbm_comp == HBM_COLORBLIND_ON)
-			retVal = -panel->hbm_elvss_comp;
-		else if(panel->weakness_hbm_comp == HBM_GALLERY_ON)
-			retVal = -HBM_INTER_22TH_OFFSET[panel->br_index - 65];
-		else
-			pr_info("%s invaid weakness_hbm_comp:%d\n", __func__, panel->weakness_hbm_comp);
-		goto exit_get_elvss;
-	}
-
-	if(UNDER_MINUS_20(panel->temperature)) {
-		switch(nit)
-		{
-#if defined(CONFIG_PANEL_S6E3HA2_DYNAMIC)	// flat
-		case 2:
-			retVal = 0x00;
-			break;
-		case 3:
-			retVal = -0x01;
-			break;
-		case 4:
-			retVal = -0x02;
-			break;
-		case 5:
-			retVal = -0x03;
-			break;
-		default:
-			retVal = -0x04;
-			break;
-#elif defined(CONFIG_PANEL_S6E3HF2_DYNAMIC)		  // edge
-		case 2:
-			retVal = -0x01;
-			break;
-		case 3:
-			retVal = -0x02;
-			break;
-		case 4:
-			retVal = -0x03;
-			break;
-		case 5:
-			retVal = -0x04;
-			break;
-		default:
-			retVal = -0x05;
-			break;
-#endif
-		}
-	} else if(UNDER_0(panel->temperature)) {
-		switch(nit)
-		{
-		case 2:
-			retVal = 0x04;
-			break;
-		case 3:
-			retVal = 0x03;
-			break;
-		case 4:
-			retVal = 0x02;
-			break;
-		case 5:
-			retVal = 0x01;
-			break;
-		default:
-			retVal = 0x00;
-			break;
-		}
-	} else {
-		retVal = 0x00;
-	}
-
-exit_get_elvss:
 	pr_info("%s %d\n", __func__, retVal);
 	return retVal;
 }
@@ -217,8 +149,6 @@ static void dsim_panel_set_elvss(struct dsim_device *dsim)
 {
 	u8 *elvss = NULL;
 	unsigned char SEQ_ELVSS[ELVSS_LEN_MAX] = {0, };
-	struct panel_private *panel = &dsim->priv;
-	bool bIsHbm = (LEVEL_IS_HBM(panel->auto_brightness) && (panel->bd->props.brightness == panel->bd->props.max_brightness));
 
 	SEQ_ELVSS[0] = ELVSS_REG;
 	elvss = get_elvss_from_index(dsim, dsim->priv.br_index, dsim->priv.caps_enable);
@@ -230,9 +160,7 @@ static void dsim_panel_set_elvss(struct dsim_device *dsim)
 	memcpy(SEQ_ELVSS, elvss, ELVSS_CMD_CNT);
 
 	SEQ_ELVSS[ELVSS_LEN - 1] += dsim_panel_get_elvssoffset(dsim);
-	if(bIsHbm ||
-		((panel->interpolation) && (panel->weakness_hbm_comp == HBM_COLORBLIND_ON)))
-		SEQ_ELVSS[2] = 0x0A;
+
 	if (dsim_write_hl_data(dsim, SEQ_ELVSS, ELVSS_LEN) < 0)
 		dsim_err("%s : failed to write elvss \n", __func__);
 }
@@ -251,7 +179,7 @@ static int dsim_panel_set_acl(struct dsim_device *dsim, int force )
 	level = ACL_OPR_OFF;
 	enabled = ACL_STATUS_OFF;
 
-	if (dsim->priv.siop_enable || LEVEL_IS_HBM(dsim->priv.auto_brightness))  // auto acl or hbm is acl on
+	if (dsim->priv.siop_enable)
 		goto acl_update;
 
 	level = dsim->priv.acl_enable;
@@ -270,7 +198,7 @@ acl_update:
 		dsim->priv.current_acl = level;
 		dsim_info("acl : %x, opr: %x\n",
 			panel->acl_cutoff_tbl[enabled][1], panel->acl_opr_tbl[level][ACL_OPR_LEN-1]);
-		dsim_info("acl: %d(%x), auto_brightness: %d\n", dsim->priv.current_acl, panel->acl_opr_tbl[level][ACL_CMD_LEN-1],dsim->priv.auto_brightness);
+		dsim_info("acl: %d(%x), adaptive_control: %d\n", dsim->priv.current_acl, panel->acl_opr_tbl[level][ACL_CMD_LEN-1], dsim->priv.adaptive_control);
 	}
 exit:
 	if (!ret)
@@ -345,7 +273,7 @@ set_vint:
 
 static int dsim_panel_set_hbm(struct dsim_device *dsim, int force)
 {
-	int ret = 0, level = LEVEL_IS_HBM(dsim->priv.auto_brightness);
+	int ret = 0, level = LEVEL_IS_HBM(dsim->priv.bd->props.brightness);
 	struct panel_private *panel = &dsim->priv;
 
 	if (panel == NULL) {
@@ -359,7 +287,7 @@ static int dsim_panel_set_hbm(struct dsim_device *dsim, int force)
 			dsim_err("fail to write hbm command.\n");
 			ret = -EPERM;
 		}
-		dsim_info("hbm: %d, auto_brightness: %d\n", dsim->priv.current_hbm, dsim->priv.auto_brightness);
+		dsim_info("hbm: %d, brightness: %d\n", dsim->priv.current_hbm, dsim->priv.bd->props.brightness);
 	}
 exit:
 	return ret;
@@ -403,7 +331,7 @@ static int low_level_set_brightness(struct dsim_device *dsim ,int force)
 	return 0;
 }
 
-static int get_acutal_br_index(struct dsim_device *dsim, int br)
+int get_acutal_br_index(struct dsim_device *dsim, int br)
 {
 	int i;
 	int min;
@@ -440,6 +368,18 @@ static int get_acutal_br_index(struct dsim_device *dsim, int br)
 
 #endif
 
+static int get_panel_acl_level(int p_br, int nit, int adaptive_control)
+{
+	int retVal = ACL_OPR_15P;
+
+	if (255 <= p_br && 433 == nit && !adaptive_control)
+		retVal = ACL_OPR_OFF;
+	else if (255 <= p_br)
+		retVal = ACL_OPR_8P;
+
+	return retVal;
+}
+
 int dsim_panel_set_brightness(struct dsim_device *dsim, int force)
 {
 	int ret = 0;
@@ -453,11 +393,9 @@ int dsim_panel_set_brightness(struct dsim_device *dsim, int force)
 	int real_br = 0;
 	int prev_index = panel->br_index;
 	int m_force = force;
-	bool bIsHbm = (LEVEL_IS_HBM(panel->auto_brightness) && (p_br == panel->bd->props.max_brightness));
-	bool is_weak_mode;
 	bool is_gallery;
-	bool is_max_br;
-	
+	unsigned int prev_acl = panel->acl_enable;
+
 #ifdef CONFIG_LCD_HMT
 	if(panel->hmt_on == HMT_ON) {
 		pr_info("%s hmt is enabled, plz set hmt brightness \n", __func__);
@@ -466,67 +404,48 @@ int dsim_panel_set_brightness(struct dsim_device *dsim, int force)
 #endif
 
 	if (panel->is_br_override && p_br!=panel->override_br_value) {
-		pr_info( "%s : brightness %d canceled by override(%d)\n", 
+		pr_info( "%s : brightness %d canceled by override(%d)\n",
 			__func__, p_br, panel->override_br_value );
 		goto set_br_exit;
 	}
 
-	is_weak_mode = (panel->weakness_hbm_comp == 1);
-	is_gallery = (panel->weakness_hbm_comp == 2);
+	is_gallery = !panel->adaptive_control;
+#ifdef CONFIG_LCD_BURNIN_CORRECTION
+	if (panel->ldu_correction_state) {
+		is_gallery = false;
+	}
+#endif
+#ifdef CONFIG_LCD_HBM_INTERPOLATION
+	if (panel->accessibility) {
+		is_gallery = false;
+	}
+#endif
 
 	dimming = (struct dim_data *)panel->dim_data;
 	if ((dimming == NULL) || (panel->br_tbl == NULL)) {
 		dsim_info("%s : this panel does not support dimming\n", __func__);
 		return ret;
 	}
-	if (is_weak_mode)	// color weak mode
-		acutal_br = panel->hbm_inter_br_tbl[p_br];
-	else if(is_gallery)	// gallery
+
+	if(is_gallery)	// gallery
 		acutal_br = panel->gallery_br_tbl[p_br];
 	else
 		acutal_br = panel->br_tbl[p_br];
 	panel->br_index = get_acutal_br_index(dsim, acutal_br);
 	real_br = get_actual_br_value(dsim, panel->br_index);
 	panel->caps_enable = CAPS_IS_ON(real_br);
-	if(panel->acl_enable != ACL_IS_ON(p_br)) {
+	panel->acl_enable = get_panel_acl_level(p_br, real_br, panel->adaptive_control);
+	if (prev_acl != panel->acl_enable) {
 		m_force = 1;
 	}
 
-	if( ACL_IS_ON(p_br) ) panel->acl_enable = ACL_OPR_15P;
-	else panel->acl_enable = ACL_OPR_OFF;
-
-	if(bIsHbm) {
-		panel->br_index = panel->hbm_index;
-		panel->acl_enable = ACL_OPR_8P;				// hbm is acl on
-		panel->caps_enable = 1;				// hbm is caps on
-	}
-	if(panel->siop_enable)					// check auto acl
-		panel->acl_enable = ACL_OPR_15P;
-
-	if (real_br > MAX_BRIGHTNESS) {
-		panel->interpolation = 1;
-	} else {
-		panel->interpolation = 0;
-	}
-
-	is_max_br =((!bIsHbm) && (p_br == 255));
-	if (is_weak_mode) {
-		panel->acl_enable = ACL_OPR_15P;
-	} else 	if (is_gallery) {
-		panel->acl_enable = ACL_OPR_15P;
-		if(is_max_br)
-			panel->acl_enable = ACL_OPR_OFF;
-	} else if(is_max_br) {
-		panel->acl_enable = ACL_OPR_8P;
-	}
-	
 	if (panel->state != PANEL_STATE_RESUMED) {
 		dsim_info("%s : panel is not active state..\n", __func__);
 		goto set_br_exit;
 	}
 
-	dsim_info("%s : platform : %d, : mapping : %d, real : %d, index : %d, interpolation : %d\n",
-		__func__, p_br, acutal_br, real_br, panel->br_index, panel->interpolation);
+	dsim_info("%s : platform : %d, : mapping : %d, real : %d, index : %d\n",
+		__func__, p_br, acutal_br, real_br, panel->br_index);
 
 	if (!m_force && panel->br_index == prev_index)
 		goto set_br_exit;
@@ -774,7 +693,11 @@ set_br_exit:
 
 static int panel_get_brightness(struct backlight_device *bd)
 {
-	return bd->props.brightness;
+	struct panel_private *priv = bl_get_data(bd);
+
+	struct dsim_device *dsim = container_of(priv, struct dsim_device, priv);
+
+	return get_actual_br_value(dsim, priv->br_index);
 }
 
 
@@ -787,8 +710,8 @@ static int panel_set_brightness(struct backlight_device *bd)
 
 	dsim = container_of(priv, struct dsim_device, priv);
 
-	if (brightness < UI_MIN_BRIGHTNESS || brightness > UI_MAX_BRIGHTNESS) {
-		printk(KERN_ALERT "Brightness should be in the range of 0 ~ 255\n");
+	if (brightness < UI_MIN_BRIGHTNESS || brightness > EXTEND_BRIGHTNESS) {
+		pr_alert("Brightness %d is out of range\n", brightness);
 		ret = -EINVAL;
 		goto exit_set;
 	}
@@ -821,7 +744,7 @@ int dsim_backlight_probe(struct dsim_device *dsim)
 		ret = PTR_ERR(panel->bd);
 	}
 
-	panel->bd->props.max_brightness = UI_MAX_BRIGHTNESS;
+	panel->bd->props.max_brightness = EXTEND_BRIGHTNESS;
 	panel->bd->props.brightness = UI_DEFAULT_BRIGHTNESS;
 
 #ifdef CONFIG_LCD_HMT

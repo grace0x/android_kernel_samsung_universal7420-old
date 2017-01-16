@@ -1110,3 +1110,11 @@ u32 dsim_reg_get_hozval(u32 id)
 	u32 val = dsim_read(id, DSIM_MDRESOL);
 	return DSIM_MDRESOL_HOZVAL_GET(val);
 }
+
+void dsim_reg_enable_byte_clock(u32 id, u32 en)
+{
+	u32 val = en ? ~0 : 0;
+
+	dsim_write_mask(id, DSIM_CLKCTRL, val, DSIM_CLKCTRL_BYTECLK_EN);
+}
+

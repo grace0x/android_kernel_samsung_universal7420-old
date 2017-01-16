@@ -20,6 +20,12 @@ struct lcd_seq_info {
 #define S6E3HA0_ID_REG				0x04
 #define S6E3HA0_ID_LEN				3
 
+#define S6E3HA0_REG_DSI_ADDR 	0xF2
+#define S6E3HA0_REG_DSI_LEN 	1
+#define S6E3HA0_REG_MIC_ADDR 	0xF9
+#define S6E3HA0_REG_MIC_LEN	1
+
+
 static const unsigned char S6E3HA0_SEQ_TEST_KEY_ON_F0[] = {
 	0xF0,
 	0x5A, 0x5A
@@ -376,14 +382,14 @@ static const unsigned char VINT_TABLE[] = {
 };
 
 #define POWER_IS_ON(pwr)			(pwr <= FB_BLANK_NORMAL)
-#define LEVEL_IS_HBM(level)			(level >= 6)
+#define LEVEL_IS_HBM(brightness)	(brightness == EXTEND_BRIGHTNESS)
 #define UNDER_MINUS_20(temperature)	(temperature <= -20)
 #define UNDER_0(temperature)	(temperature <= 0)
 
-#define ACL_IS_ON(pb) 				(pb < 255)
 #define CAPS_IS_ON(level)	(level >= 41)
 
 #define NORMAL_TEMPERATURE			25	/* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS 			439
 #define UI_MAX_BRIGHTNESS 			255
 #define UI_MIN_BRIGHTNESS 			0
 #define UI_DEFAULT_BRIGHTNESS 		134
@@ -413,7 +419,11 @@ static const unsigned char VINT_TABLE[] = {
 #define S6E3HA2_HBM_BRIGHTNESS	600
 
 #define S6E3HA2_HBM_ELVSS_INDEX		21
-#define S6E3HA2_HBM_ELVSS_COMP		0x06
+
+#define S6E3HA2_REG_DSI_ADDR 	0xF2
+#define S6E3HA2_REG_DSI_LEN 	1
+#define S6E3HA2_REG_MIC_ADDR 	0xF9
+#define S6E3HA2_REG_MIC_LEN	1
 
 #define AID_CMD_CNT					3
 #define ELVSS_CMD_CNT				3
@@ -429,7 +439,6 @@ static const unsigned char VINT_TABLE[] = {
 #define ELVSS_REG					0xB6
 #define ELVSS_LEN					23   /* elvss: Global para 22th */
 
-#define HBM_INDEX					73
 
 #define SEQ_TEST_KEY_ON_F0			S6E3HA2_SEQ_TEST_KEY_ON_F0
 #define SEQ_TEST_KEY_OFF_F0			S6E3HA2_SEQ_TEST_KEY_OFF_F0
@@ -529,9 +538,46 @@ enum {
 	HBM_GALLERY_ON,
 };
 
-// 384 ~ 550
-static const char HBM_INTER_22TH_OFFSET[] = {
-	0x02, 0x04, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06
+enum {
+	TEMP_ABOVE_0,		/* T > 0 */
+	TEMP_UNDER_0,		/* -20 < T <= 0 */
+	TEMP_UNDER_MINUS_20,	/* T <= -20 */
+	TEMP_MAX
+};
+
+enum {
+	IBRIGHTNESS_002NIT,
+	IBRIGHTNESS_003NIT,
+	IBRIGHTNESS_004NIT,
+	IBRIGHTNESS_005NIT,
+	IBRIGHTNESS_006NIT,
+
+	IBRIGHTNESS_360NIT = 64,
+	IBRIGHTNESS_382NIT,
+	IBRIGHTNESS_407NIT,
+	IBRIGHTNESS_433NIT,
+	IBRIGHTNESS_461NIT,
+	IBRIGHTNESS_491NIT,
+	IBRIGHTNESS_517NIT,
+	IBRIGHTNESS_545NIT,
+	IBRIGHTNESS_600NIT,
+	IBRIGHTNESS_HBM_MAX
+};
+
+static const char HBM_INTER_22TH_OFFSET[IBRIGHTNESS_HBM_MAX][TEMP_MAX] = {
+	[IBRIGHTNESS_002NIT] =				{0x00,	0x04,	0x00},
+	[IBRIGHTNESS_003NIT] =				{0x00,	0x03,	-0x01},
+	[IBRIGHTNESS_004NIT] =				{0x00,	0x02,	-0x02},
+	[IBRIGHTNESS_005NIT] =				{0x00,	0x01,	-0x03},
+	[IBRIGHTNESS_006NIT ... IBRIGHTNESS_360NIT] =	{0x00,	0x00,	-0x04},
+	[IBRIGHTNESS_382NIT] =				{-0x02,	-0x02,	-0x02},
+	[IBRIGHTNESS_407NIT] =				{-0x04,	-0x04,	-0x04},
+	[IBRIGHTNESS_433NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_461NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_491NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_517NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_545NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_600NIT] =				{-0x06,	-0x06,	-0x06}
 };
 
 

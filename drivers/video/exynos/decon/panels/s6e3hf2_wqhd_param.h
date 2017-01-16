@@ -12,15 +12,15 @@ struct lcd_seq_info {
 };
 
 #define POWER_IS_ON(pwr)			(pwr <= FB_BLANK_NORMAL)
-#define LEVEL_IS_HBM(level)			(level >= 6)
+#define LEVEL_IS_HBM(brightness)	(brightness == EXTEND_BRIGHTNESS)
 #define UNDER_MINUS_20(temperature)	(temperature <= -20)
 #define UNDER_0(temperature)	(temperature <= 0)
 
 
-#define ACL_IS_ON(pb) 				(pb < 255)
 #define CAPS_IS_ON(nit)				(nit >= 41)
 
 #define NORMAL_TEMPERATURE			25	/* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS 	439
 #define UI_MAX_BRIGHTNESS 	255
 #define UI_MIN_BRIGHTNESS 	0
 #define UI_DEFAULT_BRIGHTNESS 134
@@ -57,7 +57,6 @@ struct lcd_seq_info {
 
 
 #define S6E3HF2_HBM_ELVSS_INDEX		21
-#define S6E3HF2_HBM_ELVSS_COMP		0x06
 #define S6E3HF2_A2_LINE_ID		0x40
 #define S6E3HF2_A3_LINE_ID		0x80
 #define S6E3HF2_RDDPM_ADDR		0x0A
@@ -67,6 +66,13 @@ struct lcd_seq_info {
 
 #define S6E3HF2_MAX_BRIGHTNESS	360
 #define S6E3HF2_HBM_BRIGHTNESS	600
+
+
+#define S6E3HF2_REG_DSI_ADDR 	0xF2
+#define S6E3HF2_REG_DSI_LEN 	1
+#define S6E3HF2_REG_MIC_ADDR 	0xF9
+#define S6E3HF2_REG_MIC_LEN	1
+
 
 static const unsigned int VINT_DIM_TABLE[] = {
 	5,	6,	7,	8,	9,
@@ -414,9 +420,46 @@ enum {
 	HBM_GALLERY_ON,
 };
 
-// 384 ~ 550
-static const char HBM_INTER_22TH_OFFSET[] = {
-	0x02, 0x04, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06
+enum {
+	TEMP_ABOVE_0,		/* T > 0 */
+	TEMP_UNDER_0,		/* -20 < T <= 0 */
+	TEMP_UNDER_MINUS_20,	/* T <= -20 */
+	TEMP_MAX
+};
+
+enum {
+	IBRIGHTNESS_002NIT,
+	IBRIGHTNESS_003NIT,
+	IBRIGHTNESS_004NIT,
+	IBRIGHTNESS_005NIT,
+	IBRIGHTNESS_006NIT,
+
+	IBRIGHTNESS_360NIT = 64,
+	IBRIGHTNESS_382NIT,
+	IBRIGHTNESS_407NIT,
+	IBRIGHTNESS_433NIT,
+	IBRIGHTNESS_461NIT,
+	IBRIGHTNESS_491NIT,
+	IBRIGHTNESS_517NIT,
+	IBRIGHTNESS_545NIT,
+	IBRIGHTNESS_600NIT,
+	IBRIGHTNESS_HBM_MAX
+};
+
+static const char HBM_INTER_22TH_OFFSET[IBRIGHTNESS_HBM_MAX][TEMP_MAX] = {
+	[IBRIGHTNESS_002NIT] =				{0x00,	0x04,	-0x01},
+	[IBRIGHTNESS_003NIT] =				{0x00,	0x03,	-0x02},
+	[IBRIGHTNESS_004NIT] =				{0x00,	0x02,	-0x03},
+	[IBRIGHTNESS_005NIT] =				{0x00,	0x01,	-0x04},
+	[IBRIGHTNESS_006NIT ... IBRIGHTNESS_360NIT] =	{0x00,	0x00,	-0x05},
+	[IBRIGHTNESS_382NIT] =				{-0x02,	-0x02,	-0x02},
+	[IBRIGHTNESS_407NIT] =				{-0x04,	-0x04,	-0x04},
+	[IBRIGHTNESS_433NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_461NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_491NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_517NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_545NIT] =				{-0x06,	-0x06,	-0x06},
+	[IBRIGHTNESS_600NIT] =				{-0x06,	-0x06,	-0x06}
 };
 
 #endif /* __S6E3HF2_PARAM_H__ */

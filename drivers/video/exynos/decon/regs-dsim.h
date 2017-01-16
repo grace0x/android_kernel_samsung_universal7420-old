@@ -145,6 +145,12 @@
 /* Read FIFO register */
 #define DSIM_RXFIFO				(0x44)
 
+/* SFR control Register for Stanby & Shadow*/
+#define DSIM_SFR_CTRL				(0x48)
+#define DSIM_SFR_CTRL_STANDBY			(1 << 4)
+#define DSIM_SFR_CTRL_SHADOW_UPDATE		(1 << 1)
+#define DSIM_SFR_CTRL_SHADOW_EN			(1 << 0)
+
 /* FIFO status and control register */
 #define DSIM_FIFOCTRL				(0x4C)
 #define DSIM_FIFOCTRL_FULL_PH_SFR		(1 << 23)

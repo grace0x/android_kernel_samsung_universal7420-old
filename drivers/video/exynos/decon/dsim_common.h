@@ -121,5 +121,6 @@ void dsim_reg_set_pkt_go_enable(u32 id, bool en);
 void dsim_reg_set_pkt_go_ready(u32 id);
 void dsim_reg_set_pkt_go_cnt(u32 id, unsigned int count);
 void dsim_reg_set_shadow(u32 id, u32 en);
+void dsim_reg_enable_byte_clock(u32 id, u32 en);
 
 #endif /* _DSIM_COMMON_H_ */

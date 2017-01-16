@@ -71,6 +71,47 @@ read_exit:
 read_fail:
 	return -ENODEV;
 }
+
+static int s6e3ha0_read_reg_status(struct dsim_device *dsim, bool need_key_unlock )
+{
+	static int cnt = 0;
+	static int err_cnt = 0;
+	int ret = 0;
+	int result = 0;
+
+	unsigned char reg_buffer_dsi[S6E3HA0_REG_DSI_LEN+4] = { 0, };
+	unsigned char reg_buffer_mic[S6E3HA0_REG_MIC_LEN+4] = { 0, };
+
+	if( need_key_unlock ) {
+		ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(S6E3HA0_SEQ_TEST_KEY_ON_F0));
+		if (ret < 0) {
+			dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_ON_F0\n", __func__);
+		}
+	}
+
+	ret = dsim_read_hl_data(dsim, S6E3HA0_REG_DSI_ADDR, S6E3HA0_REG_DSI_LEN, reg_buffer_dsi);
+	ret = dsim_read_hl_data(dsim, S6E3HA0_REG_MIC_ADDR, S6E3HA0_REG_MIC_LEN, reg_buffer_mic);
+
+	if( reg_buffer_dsi[0]!=S6E3HA0_SEQ_SINGLE_DSI_1[1] || reg_buffer_mic[0]!=S6E3HA0_SEQ_SINGLE_DSI_2[1] ) {
+		dsim_err( "%s : register unMatch detected(%d,%d). DSI(%02x.%02x)->%02x.%02x, MIC(%02x.%02x)->%02x.%02x\n",
+			__func__, cnt, err_cnt++,S6E3HA0_SEQ_SINGLE_DSI_1[0], S6E3HA0_SEQ_SINGLE_DSI_1[1], S6E3HA0_REG_DSI_ADDR, reg_buffer_dsi[0],
+			S6E3HA0_SEQ_SINGLE_DSI_2[0], S6E3HA0_SEQ_SINGLE_DSI_2[1], S6E3HA0_REG_MIC_ADDR, reg_buffer_mic[0] );
+		result = 1;
+	} else {
+		dsim_info( "%s : register matched(%d,%d)\n", __func__, cnt++, err_cnt );
+	}
+
+	if( need_key_unlock ) {
+		ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_TEST_KEY_OFF_F0, ARRAY_SIZE(S6E3HA0_SEQ_TEST_KEY_OFF_F0));
+		if (ret < 0) {
+			dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_OFF_F0\n", __func__);
+		}
+	}
+	ret = 0;
+
+	return result;
+}
+
 static int s6e3ha0_wqhd_probe(struct dsim_device *dsim)
 {
 	int ret = 0;
@@ -145,7 +186,7 @@ exit_err:
 static int s6e3ha0_wqhd_init(struct dsim_device *dsim)
 {
 	int ret = 0;
-
+	int cnt;
 	dsim_info("MDD : %s was called\n", __func__);
 
 	ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(S6E3HA0_SEQ_TEST_KEY_ON_F0));
@@ -153,16 +194,22 @@ static int s6e3ha0_wqhd_init(struct dsim_device *dsim)
 		dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_ON_F0\n", __func__);
 		goto init_err;
 	}
-	ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_SINGLE_DSI_1, ARRAY_SIZE(S6E3HA0_SEQ_SINGLE_DSI_1));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_1\n", __func__);
-		goto init_err;
-	}
-	ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_SINGLE_DSI_2, ARRAY_SIZE(S6E3HA0_SEQ_SINGLE_DSI_2));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_2\n", __func__);
-		goto init_err;
-	}
+
+	cnt = 0;
+	do {
+	        ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_SINGLE_DSI_1, ARRAY_SIZE(S6E3HA0_SEQ_SINGLE_DSI_1));
+	        if (ret < 0) {
+		        dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_1\n", __func__);
+		        //goto init_err;
+	        }
+	        ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_SINGLE_DSI_2, ARRAY_SIZE(S6E3HA0_SEQ_SINGLE_DSI_2));
+	        if (ret < 0) {
+		        dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_2\n", __func__);
+		        //goto init_err;
+	        }
+	} while( s6e3ha0_read_reg_status(dsim, false ) && cnt++ <3 );
+	//if( cnt >= 3 ) panic( "s6e3ha0_read_reg_status()" );
+
 	msleep(5);
 
 	ret = dsim_write_hl_data(dsim, S6E3HA0_SEQ_TEST_KEY_ON_FC, ARRAY_SIZE(S6E3HA0_SEQ_TEST_KEY_ON_FC));
@@ -277,7 +324,7 @@ static const unsigned char *HBM_TABLE[HBM_STATUS_MAX] = {S6E3HA2_SEQ_HBM_OFF, S6
 static const unsigned char *ACL_CUTOFF_TABLE[ACL_STATUS_MAX] = {S6E3HA2_SEQ_ACL_OFF, S6E3HA2_SEQ_ACL_ON};
 static const unsigned char *ACL_OPR_TABLE[ACL_OPR_MAX] = {S6E3HA2_SEQ_ACL_OFF_OPR, S6E3HA2_SEQ_ACL_ON_OPR_8, S6E3HA2_SEQ_ACL_ON_OPR_15};
 
-static const unsigned int br_tbl [256] = {
+static const unsigned int br_tbl[EXTEND_BRIGHTNESS + 1] = {
 	2, 2, 2, 3,	4, 5, 6, 7,	8,	9,	10,	11,	12,	13,	14,	15,		// 16
 	16,	17,	18,	19,	20,	21,	22,	23,	25,	27,	29,	31,	33,	36,   	// 14
 	39,	41,	41,	44,	44,	47,	47,	50,	50,	53,	53,	56,	56,	56,		// 14
@@ -299,30 +346,21 @@ static const unsigned int br_tbl [256] = {
 	282, 282, 282, 300, 300, 300, 300, 300,	300, 300, 300,
 	300, 300, 300, 300, 316, 316, 316, 316, 316, 316, 316,
 	316, 316, 316, 316, 316, 333, 333, 333, 333, 333, 333,
-	333, 333, 333, 333, 333, 333, 333							//7
+	333, 333, 333, 333, 333, 333, 333,							//7
+	[243 ... 262] = 333,
+	[263 ... 278] = 360,
+	[279 ... 296] = 382,
+	[297 ... 315] = 407,
+	[316 ... 336] = 433,
+	[337 ... 357] = 461,
+	[358 ... 376] = 490,
+	[377 ... 397] = 516,
+	[398 ... 438] = 544,
+	[439 ... 439] = 600
 };
 
 
-static const unsigned int hbm_interpolation_br_tbl[256] = {
-	2,		2,		2,		4,		7,		9,		11,		14,		16,		19,		21,		23,		26,		28,		30,		33,
-	35,		37,		40,		42,		45,		47,		49,		52,		54,		56,		59,		61,		63,		66,		68,		71,
-	73,		75,		78,		80,		82,		85,		87,		89,		92,		94,		97,		99,		101,	104,	106,	108,
-	111,	113,	115,	118,	120,	123,	125,	127,	130,	132,	134,	137,	139,	141,	144,	146,
-	149,	151,	153,	156,	158,	160,	163,	165,	167,	170,	172,	175,	177,	179,	182,	184,
-	186,	189,	191,	193,	196,	198,	201,	203,	205,	208,	210,	212,	215,	217,	219,	222,
-	224,	227,	229,	231,	234,	236,	238,	241,	243,	245,	248,	250,	253,	255,	257,	260,
-	262,	264,	267,	269,	271,	274,	276,	279,	281,	283,	286,	288,	290,	293,	295,	297,
-	300,	302,	305,	307,	309,	312,	314,	316,	319,	321,	323,	326,	328,	331,	333,	335,
-	338,	340,	342,	345,	347,	349,	352,	354,	357,	359,	361,	364,	366,	368,	371,	373,
-	375,	378,	380,	383,	385,	387,	390,	392,	394,	397,	399,	401,	404,	406,	409,	411,
-	413,	416,	418,	420,	423,	425,	427,	430,	432,	435,	437,	439,	442,	444,	446,	449,
-	451,	453,	456,	458,	461,	463,	465,	468,	470,	472,	475,	477,	479,	482,	484,	487,
-	489,	491,	494,	496,	498,	501,	503,	505,	508,	510,	513,	515,	517,	520,	522,	524,
-	527,	529,	531,	534,	536,	539,	541,	543,	546,	548,	550,	553,	555,	557,	560,	562,
-	565,	567,	569,	572,	574,	576,	579,	581,	583,	586,	588,	591,	593,	595,	598,	600
-};
-
-static const unsigned gallery_br_tbl[256] = {
+static const unsigned gallery_br_tbl[EXTEND_BRIGHTNESS + 1] = {
 	 2,  2,  2,  3,  5,  6,  8,  10,  11,  13,  15,  16,  18,  20,  21,  23,
 	 25,  26,  28,  29,  32,  33,  34,  36,  38,  39,  41,  43,  44,  46,  48,  50,
 	 51,  53,  55,  56,  57,  60,  61,  62,  64,  66,  68,  69,  71,  73,  74,  76,
@@ -339,6 +377,12 @@ static const unsigned gallery_br_tbl[256] = {
 	 342, 344, 346, 347, 349, 351, 352, 354, 356, 357, 359, 361, 362, 364, 365, 367,
 	 369, 370, 372, 374, 375, 377, 379, 380, 382, 384, 385, 387, 389, 390, 392, 393,
 	 396, 397, 398, 400, 402, 403, 405, 407, 408, 410, 412, 414, 415, 417, 419, 430,
+	[256 ... 336] = 433,
+	[337 ... 357] = 461,
+	[358 ... 376] = 490,
+	[377 ... 397] = 516,
+	[398 ... 438] = 544,
+	[439 ... 439] = 600
 };
 
 
@@ -429,9 +473,9 @@ struct SmtDimInfo dimming_info_RC[MAX_BR_INFO] = {				// add hbm array
 	{.br = 407, .refBr = 407, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps13, .elv = elv13, .way = W3},  // hbm is acl on
 	{.br = 433, .refBr = 433, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps14, .elv = elv14, .way = W3},  // hbm is acl on
 	{.br = 461, .refBr = 461, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps15, .elv = elv15, .way = W3},  // hbm is acl on
-	{.br = 491, .refBr = 491, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps16, .elv = elv16, .way = W3},  // hbm is acl on
-	{.br = 517, .refBr = 517, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps17, .elv = elv17, .way = W3},  // hbm is acl on
-	{.br = 545, .refBr = 545, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps18, .elv = elv18, .way = W3},  // hbm is acl on
+	{.br = 490, .refBr = 490, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps16, .elv = elv16, .way = W3},  // hbm is acl on
+	{.br = 516, .refBr = 516, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps17, .elv = elv17, .way = W3},  // hbm is acl on
+	{.br = 544, .refBr = 544, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps18, .elv = elv18, .way = W3},  // hbm is acl on
 /* hbm */
 	{.br = 600, .refBr = 600, .cGma = gma2p20, .rTbl = RCrtbl360nit, .cTbl = RCctbl360nit, .aid = aid1005, .elvCaps = elvCaps19, .elv = elv19, .way = W4}, // hbm is acl on
 };
@@ -512,9 +556,9 @@ struct SmtDimInfo dimming_info_RE[MAX_BR_INFO] = {				// add hbm array
 	{.br = 407, .refBr = 407, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps13, .elv = elv13, .way = W3},  // hbm is acl on
 	{.br = 433, .refBr = 433, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps14, .elv = elv14, .way = W3},  // hbm is acl on
 	{.br = 461, .refBr = 461, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps15, .elv = elv15, .way = W3},  // hbm is acl on
-	{.br = 491, .refBr = 491, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps16, .elv = elv16, .way = W3},  // hbm is acl on
-	{.br = 517, .refBr = 517, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps17, .elv = elv17, .way = W3},  // hbm is acl on
-	{.br = 545, .refBr = 545, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps18, .elv = elv18, .way = W3},  // hbm is acl on
+	{.br = 490, .refBr = 490, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps16, .elv = elv16, .way = W3},  // hbm is acl on
+	{.br = 516, .refBr = 516, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps17, .elv = elv17, .way = W3},  // hbm is acl on
+	{.br = 544, .refBr = 544, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps18, .elv = elv18, .way = W3},  // hbm is acl on
 /* hbm */
 	{.br = 600, .refBr = 600, .cGma = gma2p20, .rTbl = RErtbl360nit, .cTbl = REctbl360nit, .aid = aid1005, .elvCaps = elvCaps19, .elv = elv19, .way = W4}, // hbm is acl on
 };
@@ -767,13 +811,10 @@ static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm)
 	panel->dim_data= (void *)dimming;
 	panel->dim_info = (void *)diminfo;
 	panel->br_tbl = (unsigned int *)br_tbl;
-	panel->hbm_inter_br_tbl = (unsigned int *)hbm_interpolation_br_tbl;
 	panel->gallery_br_tbl = (unsigned int*)gallery_br_tbl;
 	panel->hbm_tbl = (unsigned char **)HBM_TABLE;
 	panel->acl_cutoff_tbl = (unsigned char **)ACL_CUTOFF_TABLE;
 	panel->acl_opr_tbl = (unsigned char **)ACL_OPR_TABLE;
-	panel->hbm_index = MAX_BR_INFO - 1;
-	panel->hbm_elvss_comp = S6E3HA2_HBM_ELVSS_COMP;
 
 	for (j = 0; j < CI_MAX; j++) {
 		temp = ((mtp[pos] & 0x01) ? -1 : 1) * mtp[pos+1];
@@ -873,7 +914,7 @@ error:
 
 }
 #ifdef CONFIG_LCD_HMT
-static const unsigned int hmt_br_tbl [256] = {
+static const unsigned int hmt_br_tbl[EXTEND_BRIGHTNESS + 1] = {
 	10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
 	10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 12, 12,
 	13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 17, 17, 17, 17, 17, 19,
@@ -889,7 +930,8 @@ static const unsigned int hmt_br_tbl [256] = {
 	77, 77, 77, 77, 77, 77, 77, 77, 82, 82, 82, 82, 82, 82, 82, 82,
 	82, 82, 82, 82, 87, 87, 87, 87, 87, 87, 87, 87, 87, 87, 87, 87,
 	87, 87, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93, 93,
-	93, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 105
+	93, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 105,
+	[UI_MAX_BRIGHTNESS + 1 ... EXTEND_BRIGHTNESS] = 105
 };
 
 struct SmtDimInfo hmt_dimming_info[HMT_MAX_BR_INFO] = {
@@ -1111,6 +1153,49 @@ read_exit:
 read_fail:
 	return -ENODEV;
 }
+
+
+static int s6e3ha2_read_reg_status(struct dsim_device *dsim, bool need_key_unlock )
+{
+	static int cnt = 0;
+	static int err_cnt = 0;
+	int ret = 0;
+	int result = 0;
+
+	unsigned char reg_buffer_dsi[S6E3HA2_REG_DSI_LEN+4] = { 0, };
+	unsigned char reg_buffer_mic[S6E3HA2_REG_MIC_LEN+4] = { 0, };
+
+	if( need_key_unlock ) {
+		ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(S6E3HA2_SEQ_TEST_KEY_ON_F0));
+		if (ret < 0) {
+			dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_ON_F0\n", __func__);
+		}
+	}
+
+	ret = dsim_read_hl_data(dsim, S6E3HA2_REG_DSI_ADDR, S6E3HA2_REG_DSI_LEN, reg_buffer_dsi);
+	ret = dsim_read_hl_data(dsim, S6E3HA2_REG_MIC_ADDR, S6E3HA2_REG_MIC_LEN, reg_buffer_mic);
+
+	if( reg_buffer_dsi[0]!=S6E3HA2_SEQ_SINGLE_DSI_1[1] || reg_buffer_mic[0]!=S6E3HA2_SEQ_SINGLE_DSI_2[1] ) {
+		dsim_err( "%s : register unMatch detected(%d,%d). DSI(%02x.%02x)->%02x.%02x, MIC(%02x.%02x)->%02x.%02x\n",
+			__func__, cnt, ++err_cnt,S6E3HA2_SEQ_SINGLE_DSI_1[0], S6E3HA2_SEQ_SINGLE_DSI_1[1], S6E3HA2_REG_DSI_ADDR, reg_buffer_dsi[0],
+			S6E3HA2_SEQ_SINGLE_DSI_2[0], S6E3HA2_SEQ_SINGLE_DSI_2[1], S6E3HA2_REG_MIC_ADDR, reg_buffer_mic[0] );
+		result = 1;
+	} else {
+		dsim_info( "%s : register matched(%d,%d).\n", __func__, ++cnt, err_cnt );
+	}
+
+	if( need_key_unlock ) {
+		ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_TEST_KEY_OFF_F0, ARRAY_SIZE(S6E3HA2_SEQ_TEST_KEY_OFF_F0));
+		if (ret < 0) {
+			dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_OFF_F0\n", __func__);
+		}
+	}
+	ret = 0;
+
+	return result;
+}
+
+
 static int s6e3ha2_wqhd_dump(struct dsim_device *dsim)
 {
 	int ret = 0;
@@ -1308,7 +1393,7 @@ exit_err:
 static int s6e3ha2_wqhd_init(struct dsim_device *dsim)
 {
 	int ret = 0;
-
+	int cnt;
 	dsim_info("MDD : %s was called\n", __func__);
 
 	ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(S6E3HA2_SEQ_TEST_KEY_ON_F0));
@@ -1331,17 +1416,23 @@ static int s6e3ha2_wqhd_init(struct dsim_device *dsim)
 	msleep(5);
 
 	/* 9. Interface Setting */
+	cnt = 0;
+	do {
+		if( cnt>0 ) dsim_err( "%s : DSI/MIC cmd retry\n", __func__ );
 
-	ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_SINGLE_DSI_1, ARRAY_SIZE(S6E3HA2_SEQ_SINGLE_DSI_1));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_1\n", __func__);
-		goto init_exit;
-	}
-	ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_SINGLE_DSI_2, ARRAY_SIZE(S6E3HA2_SEQ_SINGLE_DSI_2));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_2\n", __func__);
-		goto init_exit;
-	}
+	        ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_SINGLE_DSI_1, ARRAY_SIZE(S6E3HA2_SEQ_SINGLE_DSI_1));
+	        if (ret < 0) {
+		        dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_1\n", __func__);
+		        //goto init_exit;
+	        }
+	        ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_SINGLE_DSI_2, ARRAY_SIZE(S6E3HA2_SEQ_SINGLE_DSI_2));
+	        if (ret < 0) {
+		        dsim_err("%s : fail to write CMD : SEQ_SINGLE_DSI_2\n", __func__);
+		        //goto init_exit;
+	        }
+	} while( s6e3ha2_read_reg_status(dsim, false ) && cnt++ <3 );
+	// if( cnt >= 3 ) panic( "s6e3ha2_read_reg_status()" );
+
 #ifdef CONFIG_LCD_HMT
 	if(dsim->priv.hmt_on != HMT_ON)
 #endif
