@@ -21,6 +21,7 @@ unexport LC_ALL
 LC_COLLATE=C
 LC_NUMERIC=C
 export LC_COLLATE LC_NUMERIC
+unexport GREP_OPTIONS 
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
@@ -158,6 +159,9 @@ VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
 
 export srctree objtree VPATH
 
+ifdef CONFIG_WITH_CCACHE 
+CCACHE	:= ccache
+endif
 
 # SUBARCH tells the usermode build what the underlying arch is.  That is set
 # first, and if a usermode build is happening, the "ARCH=um" on the command
@@ -192,10 +196,8 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 # "make" in the configured kernel build directory always uses that.
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
-#ARCH		?= $(SUBARCH)
-#CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
-ARCH		= arm64
-CROSS_COMPILE = ../PLATFORM/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+ARCH	= arm64
+CROSS_COMPILE	= /home/aarch64-sabermod-7.0/bin/aarch64-
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -241,9 +243,14 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 	  else if [ -x /bin/bash ]; then echo /bin/bash; \
 	  else echo sh; fi ; fi)
 
+ifdef CONFIG_WITH_CCACHE
+HOSTCC       = $(CCACHE) gcc
+HOSTCXX      = $(CCACHE) g++
+else
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
+endif
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89
 HOSTCXXFLAGS = -O2
 
 # Decide whether to build built-in, modular, or both.
@@ -328,7 +335,11 @@ include $(srctree)/scripts/Kbuild.include
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
+ifdef CONFIG_WITH_CCACHE
+CC		= $(CCACHE) $(CROSS_COMPILE)gcc
+else
 CC		= $(CROSS_COMPILE)gcc
+endif 
 CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
@@ -381,12 +392,30 @@ LINUXINCLUDE    := \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
-KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+KBUILD_CFLAGS   := -DNDEBUG -w -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
-		   -Werror-implicit-function-declaration \
+		   -Wno-Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
-		   -fdiagnostics-show-option -Werror
+		   -fdiagnostics-show-option \
+		   -mtune=cortex-a57.cortex-a53 \
+		   -std=gnu89
+
+# GCC is too strict
+KBUILD_CFLAGS	+= -Wno-error=misleading-indentation -Wno-error=tautological-compare -Wno-error=array-bounds -Wno-error=overflow
+# Silence these
+KBUILD_CFLAGS	+= -Wno-maybe-uninitialized		\
+		   -Wno-error=unused-but-set-parameter	\
+		   -Wno-error=unused-but-set-variable	\
+		   -Wno-error=unused-function		\
+		   -Wno-error=unused-label		\
+		   -Wno-error=unused-local-typedefs	\
+		   -Wno-error=unused-parameter		\
+		   -Wno-error=unused-result		\
+		   -Wno-error=unused-variable		\
+		   -Wno-error=unused-const-variable	\
+		   -Wno-error=unused-value
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
@@ -590,6 +619,9 @@ KBUILD_CFLAGS	+= -O2
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
+
+# Tell gcc to never replace conditional load with a non-conditional one
+KBUILD_CFLAGS	+= $(call cc-option,--param=allow-store-data-races=0)
 
 ifdef CONFIG_READABLE_ASM
 # Disable optimizations that make assembler listings hard to read.
