@@ -109,6 +109,10 @@ struct thermal_sensor_conf {
 	void *private_data;
 };
 
+bool is_cpu_thermal = false;
+static int enter_little_thermal_temp = 60;
+static int exit_little_thermal_temp = 55;
+
 struct exynos_thermal_zone {
 	enum thermal_device_mode mode;
 	struct thermal_zone_device *therm_dev;
@@ -150,6 +154,31 @@ static void __init init_mp_cpumask_set(void)
 	 }
 }
 #endif
+
+static ssize_t show_little_thermal_temp(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n", enter_little_thermal_temp);
+}
+
+static ssize_t store_little_thermal_temp(struct kobject *kobj, struct attribute *attr,
+					const char *buf, size_t count)
+{
+	int thermal_temp;
+
+	if (!sscanf(buf, "%8d", &thermal_temp))
+		return -EINVAL;
+
+	if (thermal_temp < 40 || thermal_temp > 90) {
+		pr_err("%s: invalid value (%d)\n", __func__, thermal_temp);
+		return -EINVAL;
+	}
+
+	enter_little_thermal_temp = thermal_temp;
+	exit_little_thermal_temp = thermal_temp - 5;
+
+	return count;
+}
 
 /* Get mode callback functions for thermal zone */
 static int exynos_get_mode(struct thermal_zone_device *thermal,
@@ -593,7 +622,10 @@ static int __ref exynos_throttle_cpu_hotplug(struct thermal_zone_device *thermal
 							__func__);
 			else
 				is_cpu_hotplugged_out = true;
-		}
+		} else if (cur_temp > enter_little_thermal_temp)
+			is_cpu_thermal = true;
+		else if (cur_temp < exit_little_thermal_temp)
+			is_cpu_thermal = false;
 	}
 
 	return ret;
@@ -660,6 +692,10 @@ static void exynos_report_trigger(void)
 	kobject_uevent_env(&th_zone->therm_dev->device.kobj, KOBJ_CHANGE, envp);
 }
 
+static struct global_attr little_thermal_temp =
+		__ATTR(little_thermal_temp, S_IRUGO | S_IWUSR,
+			show_little_thermal_temp, store_little_thermal_temp);
+
 /* Register with the in-kernel thermal management */
 static int exynos_register_thermal(struct thermal_sensor_conf *sensor_conf)
 {
@@ -718,6 +754,12 @@ static int exynos_register_thermal(struct thermal_sensor_conf *sensor_conf)
 		goto err_unregister;
 	}
 	th_zone->mode = THERMAL_DEVICE_ENABLED;
+
+	ret = sysfs_create_file(power_kobj, &little_thermal_temp.attr);
+	if (ret) {
+		pr_err("%s: failed to create little thermal temp sysfs interface\n",
+			__func__);
+	}
 
 	pr_info("Exynos: Kernel Thermal management registered\n");
 
