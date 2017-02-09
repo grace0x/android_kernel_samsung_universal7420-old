@@ -693,11 +693,7 @@ set_br_exit:
 
 static int panel_get_brightness(struct backlight_device *bd)
 {
-	struct panel_private *priv = bl_get_data(bd);
-
-	struct dsim_device *dsim = container_of(priv, struct dsim_device, priv);
-
-	return get_actual_br_value(dsim, priv->br_index);
+	return bd->props.brightness;
 }
 
 

@@ -75,12 +75,6 @@ static struct mdnie_table *mdnie_find_table(struct mdnie_info *mdnie)
 		table = &hmt_table[mdnie->hmt_mode];
 		goto exit;
 #endif
-	} else if (IS_HBM(mdnie->auto_brightness)) {
-		if((mdnie->scenario == BROWSER_MODE) || (mdnie->scenario == EBOOK_MODE))
-			table = &hbm_table[HBM_ON_TEXT];
-		else
-			table = &hbm_table[HBM_ON];
-		goto exit;
 #if defined(CONFIG_TDMB)
 	} else if (IS_DMB(mdnie->scenario)) {
 		table = &dmb_table[mdnie->mode];
@@ -534,39 +528,6 @@ static ssize_t bypass_store(struct device *dev,
 	return count;
 }
 
-static ssize_t auto_brightness_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct mdnie_info *mdnie = dev_get_drvdata(dev);
-
-	return sprintf(buf, "%d, hbm: %d\n", mdnie->auto_brightness, mdnie->hbm);
-}
-
-static ssize_t auto_brightness_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct mdnie_info *mdnie = dev_get_drvdata(dev);
-	unsigned int value;
-	int ret;
-	static unsigned int update;
-
-	ret = kstrtouint(buf, 0, &value);
-	if (ret < 0)
-		return ret;
-
-	dev_info(dev, "%s: value=%d\n", __func__, value);
-
-	mutex_lock(&mdnie->lock);
-	update = (IS_HBM(mdnie->auto_brightness) != IS_HBM(value)) ? 1 : 0;
-	mdnie->hbm = IS_HBM(value) ? HBM_ON : HBM_OFF;
-	mdnie->auto_brightness = value;
-	mutex_unlock(&mdnie->lock);
-
-	if (update)
-		mdnie_update(mdnie);
-	
-	return count;
-}
 static ssize_t sensorRGB_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -672,7 +633,6 @@ static struct device_attribute mdnie_attributes[] = {
 	__ATTR(accessibility, 0664, accessibility_show, accessibility_store),
 	__ATTR(color_correct, 0444, color_correct_show, NULL),
 	__ATTR(bypass, 0664, bypass_show, bypass_store),
-	__ATTR(auto_brightness, 0664, auto_brightness_show, auto_brightness_store),
 //	__ATTR(mdnie, 0444, mdnie_show, NULL),
 	__ATTR(sensorRGB, 0664, sensorRGB_show, sensorRGB_store),
 #if defined(CONFIG_LCD_HMT)

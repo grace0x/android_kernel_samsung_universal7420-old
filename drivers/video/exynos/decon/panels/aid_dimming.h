@@ -21,8 +21,6 @@
 #include "s6e3ha3_wqhd_dimming.h"
 #elif defined(CONFIG_PANEL_S6E3HF2_DYNAMIC)
 #include "s6e3hf2_wqhd_dimming.h"
-#elif defined(CONFIG_PANEL_S6E3FA3_A8XE)
-#include "s6e3fa3_a8xe_dimming.h"
 #else
 #error "ERROR !! Check LCD Panel Header File"
 #endif

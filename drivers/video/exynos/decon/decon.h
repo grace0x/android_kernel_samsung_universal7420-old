@@ -407,7 +407,7 @@ struct decon_win_config {
 			/* no read area of IDMA */
 			struct decon_win_rect		block_area;
 			struct decon_win_rect           transparent_area;
-			struct decon_win_rect           opaque_area;
+			struct decon_win_rect           opaque_area;			
 			/* source framebuffer coordinates */
 			struct decon_frame		src;
 		};
@@ -481,7 +481,6 @@ enum decon_doze_mode {
 	DECON_DOZE_STATE_DOZE_SUSPEND
 };
 #endif
-
 struct decon_underrun_stat {
 	int	prev_bw;
 	int	prev_int_bw;
@@ -951,12 +950,15 @@ static inline void decon_lpd_trig_reset(struct decon_device *decon)
 
 static inline bool is_cam_not_running(struct decon_device *decon)
 {
-	return (!((decon_reg_get_cam_status(decon->cam_status[0]) & 0xF) ||
+	if (!decon->id)
+		return (!((decon_reg_get_cam_status(decon->cam_status[0]) & 0xF) ||
 		(decon_reg_get_cam_status(decon->cam_status[1]) & 0xF)));
+	else
+		return true;
 }
 static inline bool decon_lpd_enter_cond(struct decon_device *decon)
 {
-#if defined(CONFIG_LCD_ALPM) || defined(CONFIG_LCD_HMT) || defined(CONFIG_LCD_DOZE_MODE)
+#if defined(CONFIG_LCD_ALPM) || defined(CONFIG_LCD_HMT)
 	struct dsim_device *dsim = NULL;
 	dsim = container_of(decon->output_sd, struct dsim_device, sd);
 #endif
@@ -965,16 +967,9 @@ static inline bool decon_lpd_enter_cond(struct decon_device *decon)
 	&& (!dsim->alpm)
 #endif
 #ifdef CONFIG_LCD_HMT
-	&& (!dsim->priv.hmt_on)
-#endif
-#if defined(CONFIG_EXYNOS_DECON_MDNIE)
-	&& (decon->mdnie->auto_brightness < 6)
-#endif
-#ifdef CONFIG_LCD_DOZE_MODE
-	&& (!dsim->dsim_doze)
+		&& (!dsim->priv.hmt_on)
 #endif
 		&& (atomic_inc_return(&decon->lpd_trig_cnt) >= DECON_ENTER_LPD_CNT));
-
 }
 static inline bool decon_min_lock_cond(struct decon_device *decon)
 {

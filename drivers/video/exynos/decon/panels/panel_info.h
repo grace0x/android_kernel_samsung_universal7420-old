@@ -13,9 +13,6 @@
 #elif defined(CONFIG_PANEL_S6E3HF3_DYNAMIC)
 #include "s6e3ha3_s6e3ha2_wqhd_param.h"
 
-#elif defined(CONFIG_PANEL_S6E3FA3_A8XE)
-#include "s6e3fa3_a8xe_param.h"
-
 #else
 #error "ERROR !! Check LCD Panel Header File"
 #endif

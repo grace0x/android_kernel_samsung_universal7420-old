@@ -2787,7 +2787,7 @@ static void decon_set_win_update_config(struct decon_device *decon,
 	}
 #endif
 #ifdef CONFIG_LCD_DOZE_MODE
-	if ((decon->pdata->out_type == DECON_OUT_DSI) &&
+	if ((decon->out_type == DECON_OUT_DSI) &&
 		(decon->decon_doze == DECON_DOZE_STATE_DOZE)) {
 		memset(update_config, 0, sizeof(struct decon_win_config));
 	}
@@ -4274,7 +4274,7 @@ int decon_doze_enable(struct decon_device *decon)
 #endif
 
 #ifdef CONFIG_FB_WINDOW_UPDATE
-	if ((decon->pdata->out_type == DECON_OUT_DSI) && (decon->need_update)) {
+	if ((decon->out_type == DECON_OUT_DSI) && (decon->need_update)) {
 		decon->need_update = false;
 		decon->update_win.x = 0;
 		decon->update_win.y = 0;
