@@ -1611,8 +1611,6 @@ static ssize_t store_boot_low_freq(struct kobject *kobj, struct attribute *attr,
 	return set_boot_low_freq(buf, count);
 }
 
-<<<<<<< HEAD
-=======
 static ssize_t show_cluster0_volt_table(struct kobject *kobj,
 				struct attribute *attr, char *buf)
 {
@@ -1649,7 +1647,7 @@ static ssize_t store_cpu_dvfs_mode_control(struct kobject *kobj, struct attribut
 	return count;
 }
 
->>>>>>> f77fe1f... DVFS control
+
 define_one_global_ro(cluster1_freq_table);
 define_one_global_rw(cluster1_min_freq);
 define_one_global_rw(cluster1_max_freq);
