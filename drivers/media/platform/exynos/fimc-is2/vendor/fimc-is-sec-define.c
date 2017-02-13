@@ -564,6 +564,7 @@ out:
 	}
 }
 
+#ifdef CAMERA_MODULE_DUALIZE
 bool fimc_is_sec_check_fw_crc32(char *buf)
 {
 	u32 *buf32 = NULL;
@@ -594,6 +595,7 @@ bool fimc_is_sec_check_fw_crc32(char *buf)
 
 	return crc32_fw_check;
 }
+#endif
 
 #if defined(CONFIG_CAMERA_OTPROM_SUPPORT_FRONT)
 bool fimc_is_sec_check_front_otp_crc32(char *buf)
@@ -625,6 +627,7 @@ bool fimc_is_sec_check_front_otp_crc32(char *buf)
 }
 #endif
 
+#ifdef CAMERA_MODULE_DUALIZE
 bool fimc_is_sec_check_setfile_crc32(char *buf)
 {
 	u32 *buf32 = NULL;
@@ -655,6 +658,7 @@ bool fimc_is_sec_check_setfile_crc32(char *buf)
 
 	return crc32_setfile_check;
 }
+#endif
 
 #ifdef CONFIG_COMPANION_USE
 bool fimc_is_sec_check_companion_fw_crc32(char *buf)
@@ -1374,6 +1378,10 @@ int fimc_is_sec_readcal_eeprom(struct device *dev, int position)
 	struct fimc_is_from_info *finfo = NULL;
 	int cal_size = 0;
 	struct i2c_client *client = NULL;
+	struct file *key_fp = NULL;
+	struct file *dump_fp = NULL;
+	mm_segment_t old_fs;
+	loff_t pos = 0;
 
 	core_pdata = dev_get_platdata(fimc_is_dev);
 #if defined(CONFIG_CAMERA_EEPROM_SUPPORT_FRONT)
@@ -1610,6 +1618,18 @@ crc_retry:
 		/* SHADING Data : Module/Manufacturer Information */
 		memcpy(finfo->shading_ver, &buf[EEP_AP_SHADING_VER_START_ADDR], FIMC_IS_SHADING_VER_SIZE);
 		finfo->shading_ver[FIMC_IS_SHADING_VER_SIZE] = '\0';
+
+#if defined(EEPROM_AF_CAL_PAN_ADDR)
+		sysfs_finfo.af_cal_pan = *((u32 *)&buf[EEPROM_AF_CAL_PAN_ADDR]);
+#endif
+#if defined(EEPROM_AF_CAL_MACRO_ADDR)
+		sysfs_finfo.af_cal_macro = *((u32 *)&buf[EEPROM_AF_CAL_MACRO_ADDR]);
+#endif
+#ifdef EEP_HEADER_MODULE_ID_ADDR
+		memcpy(sysfs_finfo.from_module_id, &cal_buf[EEP_HEADER_MODULE_ID_ADDR], FIMC_IS_MODULE_ID_SIZE);
+#else
+		memset(sysfs_finfo.from_module_id, 0x0, FIMC_IS_MODULE_ID_SIZE);
+#endif
 #endif
 	}
 
@@ -1671,18 +1691,82 @@ crc_retry:
 	}
 #endif
 
-#if defined(CONFIG_CAMERA_EEPROM_SUPPORT_FRONT)
-	if (core_pdata->use_module_check) {
-		if (finfo->header_ver[10] == FIMC_IS_LATEST_FROM_VERSION_M) {
-			is_final_cam_module_front = true;
+	// check CAMERA_MODULE_ES_VERSION in EEPROM
+	if (position == SENSOR_POSITION_REAR) {
+		if (!core_pdata->use_module_check) {
+			is_latest_cam_module = true;
 		} else {
-			is_final_cam_module_front = false;
+			if (sysfs_finfo.header_ver[10] >= CAMERA_MODULE_ES_VERSION_REAR) {
+				is_latest_cam_module = true;
+			} else {
+				is_latest_cam_module = false;
+			}
+		}
+	}
+
+	// check FIMC_IS_LATEST_FROM_VERSION_M in EEPROM
+	if (position == SENSOR_POSITION_FRONT) {
+		if (core_pdata->use_module_check) {
+			if (finfo->header_ver[10] == FIMC_IS_LATEST_FROM_VERSION_M) {
+				is_final_cam_module_front = true;
+			} else {
+				is_final_cam_module_front = false;
+			}
+		} else {
+			is_final_cam_module_front = true;
 		}
 	} else {
-		is_final_cam_module_front = true;
-	}
+		if (core_pdata->use_module_check) {
+			if (sysfs_finfo.header_ver[10] == FIMC_IS_LATEST_FROM_VERSION_M
+#if defined(CAMERA_MODULE_CORE_CS_VERSION)
+				&& sysfs_finfo.header_ver[0] == CAMERA_MODULE_CORE_CS_VERSION
 #endif
+			) {
+				is_final_cam_module = true;
+			} else {
+				is_final_cam_module = false;
+			}
+		} else {
+			is_final_cam_module = true;
+		}
+	}
 
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	key_fp = filp_open("/data/media/0/1q2w3e4r.key", O_RDONLY, 0);
+	if (IS_ERR(key_fp)) {
+		pr_info("KEY does not exist.\n");
+		key_fp = NULL;
+		goto key_err;
+	} else {
+		dump_fp = filp_open("/data/media/0/dump", O_RDONLY, 0);
+		if (IS_ERR(dump_fp)) {
+			info("dump folder does not exist.\n");
+			dump_fp = NULL;
+			goto key_err;
+		} else {
+			info("dump folder exist, Dump EEOROM cal data.\n");
+			if (position == SENSOR_POSITION_FRONT) {
+			    if (write_data_to_file("/data/media/0/dump/cal_data_front.bin", buf, FIMC_IS_DUMP_CAL_SIZE, &pos) < 0) {
+					info("Failedl to dump cal data.\n");
+					goto dump_err;
+			    }
+			} else {
+			    if (write_data_to_file("/data/media/0/dump/cal_data.bin", buf, FIMC_IS_DUMP_CAL_SIZE, &pos) < 0) {
+			    	info("Failedl to dump cal data.\n");
+			    	goto dump_err;
+			    }
+			}
+		}
+	}
+
+dump_err:
+	if (dump_fp)
+	    filp_close(dump_fp, current->files);
+key_err:
+	if (key_fp)
+	    filp_close(key_fp, current->files);
+	set_fs(old_fs);
 exit:
 	return ret;
 }
@@ -2342,43 +2426,6 @@ key_err:
 }
 #endif
 
-int fimc_is_sec_check_reload(void)
-{
-	struct file *reload_key_fp = NULL;
-	struct file *supend_resume_key_fp = NULL;
-	mm_segment_t old_fs;
-
-	old_fs = get_fs();
-	set_fs(KERNEL_DS);
-
-	reload_key_fp = filp_open("/data/media/0/reload/r1e2l3o4a5d.key", O_RDONLY, 0);
-	if (IS_ERR(reload_key_fp)) {
-		reload_key_fp = NULL;
-	} else {
-		info("Reload KEY exist, reload cal data.\n");
-		force_caldata_dump = true;
-		supend_resume_disable = true;
-	}
-
-	if (reload_key_fp)
-		filp_close(reload_key_fp, current->files);
-
-	supend_resume_key_fp = filp_open("/data/media/0/i1s2p3s4r.key", O_RDONLY, 0);
-	if (IS_ERR(supend_resume_key_fp)) {
-		supend_resume_key_fp = NULL;
-	} else {
-		info("Supend_resume KEY exist, disable runtime supend/resume. \n");
-		supend_resume_disable = true;
-	}
-
-	if (supend_resume_key_fp)
-		filp_close(supend_resume_key_fp, current->files);
-
-	set_fs(old_fs);
-
-	return 0;
-}
-
 int fimc_is_sec_readcal(struct fimc_is_core *core)
 {
 	int ret = 0;
@@ -2860,6 +2907,43 @@ exit:
 #endif
 #endif
 
+int fimc_is_sec_check_reload(void)
+{
+	struct file *reload_key_fp = NULL;
+	struct file *supend_resume_key_fp = NULL;
+	mm_segment_t old_fs;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	reload_key_fp = filp_open("/data/media/0/reload/r1e2l3o4a5d.key", O_RDONLY, 0);
+	if (IS_ERR(reload_key_fp)) {
+		reload_key_fp = NULL;
+	} else {
+		info("Reload KEY exist, reload cal data.\n");
+		force_caldata_dump = true;
+		supend_resume_disable = true;
+	}
+
+	if (reload_key_fp)
+		filp_close(reload_key_fp, current->files);
+
+	supend_resume_key_fp = filp_open("/data/media/0/i1s2p3s4r.key", O_RDONLY, 0);
+	if (IS_ERR(supend_resume_key_fp)) {
+		supend_resume_key_fp = NULL;
+	} else {
+		info("Supend_resume KEY exist, disable runtime supend/resume. \n");
+		supend_resume_disable = true;
+	}
+
+	if (supend_resume_key_fp)
+		filp_close(supend_resume_key_fp, current->files);
+
+	set_fs(old_fs);
+
+	return 0;
+}
+
 #ifdef CAMERA_MODULE_DUALIZE
 #ifdef CONFIG_COMPANION_USE
 int fimc_is_sec_read_companion_fw(struct fimc_is_core *core)
@@ -3189,10 +3273,12 @@ int fimc_is_sec_hw_init(struct fimc_is_core *core)
 		err("fimc_is_sec_run_fw_sel for front is fail(%d)", ret);
 	}
 
+#ifdef CONFIG_COMPANION_USE
 	ret = fimc_is_sec_concord_fw_sel(core, dev);
 	if (ret) {
 		err("fimc_is_sec_concord_fw_sel is fail(%d)", ret);
 	}
+#endif
 
 #ifdef CONFIG_OIS_USE
 	fimc_is_ois_fw_update(core);
@@ -3246,6 +3332,10 @@ int fimc_is_sec_fw_find(struct fimc_is_core *core)
 		snprintf(sysfs_finfo.load_fw_name, sizeof(FIMC_IS_FW_2T2_EVT1), "%s", FIMC_IS_FW_2T2_EVT1);
 		snprintf(sysfs_finfo.load_setfile_name, sizeof(FIMC_IS_2T2_SETF), "%s", FIMC_IS_2T2_SETF);
 		core_pdata->rear_sensor_id = SENSOR_NAME_S5K2T2;
+	} else if (fimc_is_sec_fw_module_compare(sysfs_finfo.header_ver, FW_3P3)) {
+		snprintf(sysfs_finfo.load_fw_name, sizeof(FIMC_IS_FW_3P3), "%s", FIMC_IS_FW_3P3);
+		snprintf(sysfs_finfo.load_setfile_name, sizeof(FIMC_IS_3P3_SETF), "%s", FIMC_IS_3P3_SETF);
+		core_pdata->rear_sensor_id = SENSOR_NAME_S5K3P3;
 	} else {
 		/* default firmware and setfile */
 		sensor_id = core_pdata->rear_sensor_id;

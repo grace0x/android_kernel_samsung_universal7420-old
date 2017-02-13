@@ -24,7 +24,7 @@
 #endif
 
 /* These definitions are need to guide from AP team */
-#define DSIM_STOP_STATE_CNT		0x7ff
+#define DSIM_STOP_STATE_CNT		0xa
 #define DSIM_BTA_TIMEOUT		0xff
 #define DSIM_LP_RX_TIMEOUT		0xffff
 #define DSIM_MULTI_PACKET_CNT		0xffff

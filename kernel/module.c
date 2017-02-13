@@ -153,7 +153,6 @@ typedef enum {
 
 #define HASH_SIZE 20
 #define TIMA_SIGN_LEN 256	/* the rsa signature length of lkm_sec_info */
-#define BOOTMODE_RECOVERY 2	/* bootmode in ATAG_CMDLINE for recovery mode */
 
 uint8_t *tci = NULL;
 uint8_t *drv_tci = NULL;
@@ -161,15 +160,6 @@ uint8_t lkmauth_tl_loaded = 0;
 uint8_t lkm_sec_info_loaded = 0;
 struct mc_session_handle mchandle;
 struct mc_session_handle drv_mchandle;
-
-unsigned int lkmauth_bootmode;
-static int __init lkmauth_bootmode_setup(char *str)
-{
-	get_option(&str, &lkmauth_bootmode);
-	return 1;
-}
-
-__setup("bootmode=", lkmauth_bootmode_setup);
 
 #endif /* End TIMA_ON_MC20 */
 
@@ -3169,14 +3159,14 @@ static int elf_header_check(struct load_info *info)
 		return -ENOEXEC;
 
 #ifdef TIMA_LKM_AUTH_ENABLED
-	if (lkmauth_bootmode != BOOTMODE_RECOVERY &&
-	    lkmauth(info->hdr, info->len) != RET_LKMAUTH_SUCCESS) {
+	if (lkmauth(info->hdr, info->len) != RET_LKMAUTH_SUCCESS) {
 		pr_err
 		    ("TIMA: lkmauth--unable to load kernel module; module len is %lu.\n",
 		     info->len);
 		return -ENOEXEC;
 	}
-#endif		
+#endif
+
 return 0;
 }
 

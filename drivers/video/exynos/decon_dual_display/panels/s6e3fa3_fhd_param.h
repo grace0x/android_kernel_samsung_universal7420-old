@@ -17,10 +17,11 @@ struct lcd_seq_info {
 #define UNDER_0(temperature)	(temperature <= 0)
 
 
-#define ACL_IS_ON(nit) 				(nit < 360)
+#define ACL_IS_ON(nit) 				(nit != 360)
 #define CAPS_IS_ON(nit)				(nit >= 41)
 
 #define NORMAL_TEMPERATURE			25	/* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS	439
 #define UI_MAX_BRIGHTNESS 	255
 #define UI_MIN_BRIGHTNESS 	0
 #define UI_DEFAULT_BRIGHTNESS 134
@@ -91,7 +92,7 @@ static const unsigned char SEQ_TEST_KEY_OFF_FC[] = {
 static const unsigned char SEQ_STAND_ALONE_MODE[] = {
 	0xF2,
 	0x31,
-}; 
+};
 
 
 static const unsigned char SEQ_SLEEP_OUT[] = {

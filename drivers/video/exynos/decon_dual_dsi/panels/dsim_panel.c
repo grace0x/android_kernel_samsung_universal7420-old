@@ -20,6 +20,9 @@
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 #include "mdnie.h"
+#if defined(CONFIG_PANEL_S6E3FA3)
+#include "mdnie_lite_table_v.h"
+#endif
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
@@ -36,7 +39,7 @@ static int mdnie_lite_write_set(struct dsim_device *dsim, struct lcd_seq_info *s
 			}
 		}
 		if (seq[i].sleep)
-			usleep_range(seq[i].sleep * 1000 , seq[i].sleep * 1000);
+			usleep_range(seq[i].sleep * 1000, seq[i].sleep * 1000);
 	}
 	return ret;
 }
@@ -53,7 +56,6 @@ int mdnie_lite_send_seq(struct dsim_device *dsim, struct lcd_seq_info *seq, u32 
 
 	mutex_lock(&panel->lock);
 	ret = mdnie_lite_write_set(dsim, seq, num);
-
 	mutex_unlock(&panel->lock);
 
 	return ret;
@@ -68,9 +70,9 @@ int mdnie_lite_read(struct dsim_device *dsim, u8 addr, u8 *buf, u32 size)
 		dsim_info("%s : panel is not active\n", __func__);
 		return -EIO;
 	}
+
 	mutex_lock(&panel->lock);
 	ret = dsim_read_hl_data(dsim, addr, size, buf);
-
 	mutex_unlock(&panel->lock);
 
 	return ret;
@@ -94,7 +96,7 @@ int sync_master_slave(struct dsim_device *dsim, struct sync_stat *next_stat)
 	dsim_info("%s :  was called\n", __func__);
 
 	if (get_dsim_drvdata(0)) {
-		m_dsim = get_dsim_drvdata(0); 
+		m_dsim = get_dsim_drvdata(0);
 		m_panel =  &(get_dsim_drvdata(0)->priv);
 	}
 	if (get_dsim_drvdata(1)) {
@@ -106,14 +108,14 @@ int sync_master_slave(struct dsim_device *dsim, struct sync_stat *next_stat)
 		dsim_info("request main lcd on\n");
 	else
 		dsim_info("requet sub lcd on\n");
-	
-	ret = m_panel->ops->init(m_dsim, next_stat->main);	
+
+	ret = m_panel->ops->init(m_dsim, next_stat->main);
 	if (ret) {
 		dsim_err("ERR:PANEL:%s:failed to master init \n",__func__);
 		goto err_sync_master_slave;
 	}
-	
-	ret = s_panel->ops->init(s_dsim, next_stat->sub);	
+
+	ret = s_panel->ops->init(s_dsim, next_stat->sub);
 	if (ret) {
 		dsim_err("ERR:PANEL:%s:failed to slave init \n",__func__);
 		goto err_sync_master_slave;
@@ -136,7 +138,7 @@ int sync_off_alone(struct dsim_device *dsim, struct sync_stat *next_stat)
 	dsim_info("%s :  was called\n", __func__);
 
 	if (get_dsim_drvdata(0)) {
-		m_dsim = get_dsim_drvdata(0); 
+		m_dsim = get_dsim_drvdata(0);
 		m_panel =  &(get_dsim_drvdata(0)->priv);
 	}
 	if (get_dsim_drvdata(1)) {
@@ -146,7 +148,7 @@ int sync_off_alone(struct dsim_device *dsim, struct sync_stat *next_stat)
 
 	if (dsim == m_dsim) {
 		dsim_info("request main lcd off\n");
-		ret = s_panel->ops->init(s_dsim, next_stat->sub);	
+		ret = s_panel->ops->init(s_dsim, next_stat->sub);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to slave init \n",__func__);
 			goto err_sync_off_alone;
@@ -158,7 +160,7 @@ int sync_off_alone(struct dsim_device *dsim, struct sync_stat *next_stat)
 		}
 	} else {
 		dsim_info("request sub lcd on\n");
-		ret = s_panel->ops->init(s_dsim, next_stat->sub);	
+		ret = s_panel->ops->init(s_dsim, next_stat->sub);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to slave init \n",__func__);
 			goto err_sync_off_alone;
@@ -180,7 +182,7 @@ int sync_off_off(struct dsim_device *dsim, struct sync_stat *next_stat)
 	dsim_info("%s :  was called\n", __func__);
 
 	if (get_dsim_drvdata(0)) {
-		m_dsim = get_dsim_drvdata(0); 
+		m_dsim = get_dsim_drvdata(0);
 		m_panel =  &(get_dsim_drvdata(0)->priv);
 	}
 	if (get_dsim_drvdata(1)) {
@@ -190,14 +192,14 @@ int sync_off_off(struct dsim_device *dsim, struct sync_stat *next_stat)
 
 	if (dsim == m_dsim) {
 		dsim_info("request main lcd off\n");
-		ret = m_panel->ops->exit(m_dsim);	
+		ret = m_panel->ops->exit(m_dsim);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to slave init \n",__func__);
 			goto err_sync_off_off;
 		}
 	} else {
 		dsim_info("request sub lcd off\n");
-		ret = s_panel->ops->exit(s_dsim);	
+		ret = s_panel->ops->exit(s_dsim);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to slave init \n",__func__);
 			goto err_sync_off_off;
@@ -212,14 +214,14 @@ err_sync_off_off:
 int sync_alone_off(struct dsim_device *dsim, struct sync_stat *next_stat)
 {
 	int ret = 0;
-	
+
 	struct dsim_device *m_dsim, *s_dsim;
 	struct panel_private *m_panel, *s_panel;
 
 	dsim_info("%s :  was called\n", __func__);
 
 	if (get_dsim_drvdata(0)) {
-		m_dsim = get_dsim_drvdata(0); 
+		m_dsim = get_dsim_drvdata(0);
 		m_panel =  &(get_dsim_drvdata(0)->priv);
 	}
 	if (get_dsim_drvdata(1)) {
@@ -229,15 +231,15 @@ int sync_alone_off(struct dsim_device *dsim, struct sync_stat *next_stat)
 
 	if (dsim == m_dsim) {
 		dsim_info("request main lcd on\n");
-		ret = m_panel->ops->init(m_dsim, next_stat->main);	
+		ret = m_panel->ops->init(m_dsim, next_stat->main);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to master init \n",__func__);
 			goto err_sync_alone_off;
-		}		
+		}
 
 	} else {
 		dsim_info("request sub lcd off\n");
-		ret = m_panel->ops->init(m_dsim, next_stat->main);	
+		ret = m_panel->ops->init(m_dsim, next_stat->main);
 		if (ret) {
 			dsim_err("ERR:PANEL:%s:failed to master init \n",__func__);
 			goto err_sync_alone_off;
@@ -259,7 +261,7 @@ err_sync_alone_off:
 struct sync_stat stat_fsm[REQ_MAX][CUR_MAX] = {
 	{
 	/* Request to turn on main lcd */
-		{.main = PANEL_STAT_MASTER, .sub = PANEL_STAT_SLAVE, .refTE = REF_TE_NONE, .fn = NULL},   /* Main : On, Sub : On */ 
+		{.main = PANEL_STAT_MASTER, .sub = PANEL_STAT_SLAVE, .refTE = REF_TE_NONE, .fn = NULL},   /* Main : On, Sub : On */
 		{.main = PANEL_STAT_STANDALONE, .sub = PANEL_STAT_OFF, .refTE = REF_TE_MAIN, .fn = NULL}, /* Sub : On, Sub : Off */
 		{.main = NEED_TO_UPDATE | FULL_UPDATE | PANEL_STAT_MASTER, .sub = NEED_TO_UPDATE | PANEL_STAT_SLAVE, .refTE = REF_TE_MAIN, .fn = sync_master_slave}, /* Main:Off(Off->Master), Sub : On(Stand->Slave)*/
 		{.main = NEED_TO_UPDATE | FULL_UPDATE | PANEL_STAT_STANDALONE, .sub = PANEL_STAT_OFF, .refTE = REF_TE_MAIN, .fn = sync_alone_off} /* Main:Off(Off->Standalone), Sub : Off */
@@ -290,7 +292,7 @@ struct sync_stat stat_fsm[REQ_MAX][CUR_MAX] = {
 #define REQ_TURN_ON		0
 #define REQ_TURN_OFF	0x01
 
- 
+
 static void print_next_stat(struct sync_stat *next_stat)
 {
 	unsigned int m_stat = next_stat->main;
@@ -367,14 +369,14 @@ static int dsim_panel_set_syncmode(struct dsim_device *dsim, unsigned int req)
 		dsim_err("ERR:DSIM:%s:can't get next stat\n", __func__);
 		goto init_err;
 	}
-	
+
 	print_next_stat(next_stat);
 
 	if (next_stat->fn == NULL) {
 		dsim_info("PANEL:%s:id-%d:skip set syncmode\n", __func__, dsim->id);
 		goto init_err;
 	}
-	
+
 	ret = next_stat->fn(dsim, next_stat);
 	if (ret) {
 		dsim_err("ERR:PANEL:%s:id-%d:failed to set syncmode\n", __func__, dsim->id);
@@ -404,9 +406,6 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 {
 	int ret = 0;
 	struct panel_private *panel = &dsim->priv;
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	u16 coordinate[2] = {0, };
-#endif
 	const char *lcd_device_name[2] = {
 		"panel",
 		"panel_1"
@@ -430,11 +429,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	panel->lcdConnected = PANEL_CONNECTED;
 	panel->acl_enable = 0;
 	panel->current_acl = 0;
-	panel->auto_brightness = 0;
 	panel->siop_enable = 0;
 	panel->current_hbm = 0;
 	panel->current_vint = 0;
-	panel->weakness_hbm_comp = 0;
+	panel->adaptive_control = 1;
 
 	if (dsim->id == 0)
 		panel->op_state = PANEL_STAT_STANDALONE | PANEL_STAT_DISPLAY_ON;
@@ -463,10 +461,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	coordinate[0] = (u16)panel->coordinate[0];
-	coordinate[1] = (u16)panel->coordinate[1];
-	if (panel->mdnie_support)
-		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, coordinate, dsim->id);
+	if (panel->mdnie_support) {
+		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, panel->coordinate, &tune_info);
+		panel->mdnie_class = get_mdnie_class();
+	}
 #endif
 
 probe_err:
@@ -480,7 +478,7 @@ static int dsim_panel_displayon(struct dsim_device *dsim)
 	struct panel_private *panel = &dsim->priv;
 
 	dsim_info("%s:id-%d was called\n", __func__, dsim->id);
-	
+
 	if (dsim == NULL || panel->ops->displayon == NULL)
 		goto err_display_on;
 

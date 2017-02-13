@@ -69,6 +69,15 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
+#if defined(CONFIG_GPS_BCMxxxxx) && !defined(CONFIG_GPS_BCM4773)
+#if defined(CONFIG_SOC_EXYNOS5430) || defined(CONFIG_SOC_EXYNOS5433) || defined(CONFIG_SOC_EXYNOS7580) || defined(CONFIG_SOC_EXYNOS7420)
+/* Devices	*/
+#define CONFIG_GPS_S3C_UART	0
+#else
+#define CONFIG_GPS_S3C_UART	1
+#endif
+#endif
+
 #include "samsung.h"
 #include "../../pinctrl/core.h"
 #include <mach/exynos-pm.h>
@@ -963,6 +972,14 @@ static unsigned int s3c24xx_serial_get_mctrl(struct uart_port *port)
 static void s3c24xx_serial_set_mctrl(struct uart_port *port, unsigned int mctrl)
 {
 	/* todo - possibly remove AFC and do manual CTS */
+#if defined(CONFIG_GPS_BCMxxxxx) && !defined(CONFIG_GPS_BCM4773)
+	unsigned int umcon = rd_regl(port, S3C2410_UMCON);
+
+	if (port->line == CONFIG_GPS_S3C_UART)
+		umcon |= S3C2410_UMCOM_AFC;
+
+	wr_regl(port, S3C2410_UMCON, umcon);
+#endif
 }
 
 static void s3c24xx_serial_break_ctl(struct uart_port *port, int break_state)

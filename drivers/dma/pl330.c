@@ -2499,8 +2499,13 @@ static inline void free_desc_list(struct list_head *list)
 		callback = desc->txd.callback;
 		param = desc->txd.callback_param;
 
+		DBG_PRINT("[%s] before callback\n", __func__);
 		if (callback)
 			callback(param);
+
+		if (pch->on_trigger)
+			pch->on_trigger = 0;
+		DBG_PRINT("[%s] after callback\n", __func__);
 
 		desc->pchan = NULL;
 	}
@@ -3245,6 +3250,41 @@ int pl330_dma_getposition(struct dma_chan *chan,
 	return 0;
 }
 EXPORT_SYMBOL(pl330_dma_getposition);
+
+int pl330_dma_debug(struct dma_chan *chan)
+{
+	struct dma_pl330_chan *pch = to_pchan(chan);
+	struct pl330_info *pi;
+	void __iomem *regs;
+	struct pl330_thread *thrd;
+
+	if (unlikely(!pch))
+		return -EINVAL;
+
+	thrd = pch->pl330_chid;
+	pi = &pch->dmac->pif;
+	regs = pi->base;
+
+	dev_err(pch->dmac->pif.dev,"[ DMA Register Dump (id: %d) ]\n", thrd->id);
+	dev_err(pch->dmac->pif.dev,"DAR:0x%x\n", readl(regs + DA(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"SAR:0x%x\n", readl(regs + SA(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"DBGSTATUS:0x%x\n", readl(regs + DBGSTATUS));
+	dev_err(pch->dmac->pif.dev,"INTMIS:0x%x\n", readl(regs + INTSTATUS));
+	dev_err(pch->dmac->pif.dev,"DSR:0x%x\n", readl(regs + DS));
+	dev_err(pch->dmac->pif.dev,"CCR:0x%x\n", readl(regs + CC(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"CSR:0x%x\n", readl(regs + CS(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"CRD:0x%x\n", readl(regs + CRD));
+	dev_err(pch->dmac->pif.dev,"LC0:0x%x\n", readl(regs + LC0(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"LC1:0x%x\n", readl(regs + LC1(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"FTR:0x%x\n", readl(regs + FTC(thrd->id)));
+	dev_err(pch->dmac->pif.dev,"FTRD:0x%x\n", readl(regs + FTM));
+	dev_err(pch->dmac->pif.dev,"FSRC:0x%x\n", readl(regs + FSC));
+	dev_err(pch->dmac->pif.dev,"FSRD:0x%x\n", readl(regs + FSM));
+	dev_err(pch->dmac->pif.dev,"Trigger: %d\n", pch->on_trigger);
+
+	return 0;
+}
+EXPORT_SYMBOL(pl330_dma_debug);
 
 static int pl330_fixup_ctrl(struct device *dev)
 {

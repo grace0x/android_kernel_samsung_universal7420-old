@@ -63,6 +63,13 @@ config SENSORS_TMD27723
 	help
 	   This option enables proximity & light sensors using TMD27723 driver.
 
+config SENSORS_TMD3700
+	depends on I2C
+	tristate "TMD3700 driver"
+	default n
+	help
+	   This option enables proximity & light sensors using TMD3782 driver.
+	   
 config SENSORS_TMD3782
 	depends on I2C
 	tristate "TMD3782 driver"

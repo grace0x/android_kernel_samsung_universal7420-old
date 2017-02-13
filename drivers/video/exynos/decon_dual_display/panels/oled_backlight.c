@@ -28,17 +28,17 @@ static int set_oled_acl(struct dsim_device *dsim, int force)
 	int acl;
 	int ret = 0;
 	int phy_br;
-	
+
 	struct panel_info *cmd;
 	struct panel_private *panel = &dsim->priv;
 	int platform_br = panel->bd->props.brightness;
 
 	cmd = &panel->command;
 	phy_br = panel->mapping_tbl.phy_br_tbl[platform_br];
-	
+
 	if (force)
 		goto set_acl;
-	
+
 	acl = ACL_IS_ON(phy_br);
 	if (acl == panel->cur_acl)
 		goto set_acl_exit;
@@ -75,7 +75,7 @@ static int set_oled_elvss(struct dsim_device *dsim, int force)
 	int ret = 0, idx;
 	char elvss[3] = {0, };
 	struct panel_private *panel = &dsim->priv;
-	
+
 	idx = panel->cur_br_idx;
 
 	elvss[0] = 0xB6;
@@ -85,7 +85,7 @@ static int set_oled_elvss(struct dsim_device *dsim, int force)
 	ret = dsim_write_hl_data(dsim, elvss, 3);
 	if (ret < 0)
 		dsim_err("ERR:%s:failed to write aid\n", __func__);
-	
+
 	return ret;
 }
 
@@ -100,7 +100,7 @@ static int set_oled_aid(struct dsim_device *dsim, int force)
 	struct decon_lcd *lcd_info = &dsim->lcd_info;
 
 	idx = panel->cur_br_idx;
-#if 0 	
+#if 0
 	aid_info = (struct panel_private *)&panel->aid_info;
 
 	if (aid_info == NULL) {
@@ -115,7 +115,7 @@ static int set_oled_aid(struct dsim_device *dsim, int force)
 	aid_cmd[0] = 0xB2;
 	aid_cmd[1] = (char)((value & 0x0f00) >> 4);
 	aid_cmd[2] = (char)(value & 0xff);
-	
+
 	dsim_info("set aid : %x : (%x : %x : %x)\n", value, aid_cmd[0], aid_cmd[1], aid_cmd[2]);
 
 	ret = dsim_write_hl_data(dsim, aid_cmd, 3);
@@ -134,7 +134,7 @@ static int set_oled_gamma(struct dsim_device *dsim ,int force)
 	struct gamma_cmd *dim_info;
 	struct panel_private *panel = &dsim->priv;
 	int size, i;
-	
+
 	idx = panel->cur_br_idx;
 	dim_info = &panel->command.gamma_cmd[idx];
 
@@ -158,7 +158,7 @@ static int low_level_set_brightness(struct dsim_device *dsim ,int force)
 	int ret = 0;
 	struct panel_info *cmd;
 	struct panel_private *panel = &dsim->priv;
-	
+
 	cmd = &panel->command;
 
 	if (cmd == NULL) {
@@ -166,7 +166,7 @@ static int low_level_set_brightness(struct dsim_device *dsim ,int force)
 		ret = -EINVAL;
 		goto set_br_exit;
 	}
-	
+
 	ret = dsim_write_hl_data(dsim, SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(SEQ_TEST_KEY_ON_F0));
 	if (ret < 0)
 		dsim_err("ERR:%s:faild to write L1 TEST KEY ON\n", __func__);
@@ -218,11 +218,11 @@ int panel_set_brightness(struct dsim_device *dsim, int force)
 	prev_idx = panel->cur_br_idx;
 	prev_ref_br = panel->cur_ref_br;
 	prev_phy_br = panel->cur_phy_br;
-	
+
 	panel->cur_br_idx = panel->mapping_tbl.idx_br_tbl[platform_br];
 	panel->cur_ref_br = panel->mapping_tbl.ref_br_tbl[platform_br];
 	panel->cur_phy_br = panel->mapping_tbl.phy_br_tbl[platform_br];
-	
+
 	dsim_info("set brightness %d : platform : %d, br_idx : %d, phy_br : %d, acl : %d\n",
 			dsim->id, platform_br, panel->cur_br_idx, panel->cur_phy_br, ACL_IS_ON(panel->cur_phy_br));
 
@@ -240,7 +240,7 @@ set_br:
 	if (ret) {
 		dsim_err("ERR:%s:failed to set brightness\n", __func__);
 	}
-	
+
 	mutex_unlock(&panel->lock);
 set_br_exit:
 	return ret;
@@ -267,8 +267,8 @@ static int set_brightness(struct backlight_device *bd)
 		goto exit_set;
 	}
 
-	if (brightness < UI_MIN_BRIGHTNESS || brightness > UI_MAX_BRIGHTNESS) {
-		printk(KERN_ALERT "Brightness should be in the range of 0 ~ 255\n");
+	if (brightness < UI_MIN_BRIGHTNESS || brightness > EXTEND_BRIGHTNESS) {
+		pr_alert("Brightness %d is out of range\n", brightness);
 		ret = -EINVAL;
 		goto exit_set;
 	}
@@ -306,7 +306,7 @@ int probe_backlight_drv(struct dsim_device *dsim)
 		ret = PTR_ERR(panel->bd);
 	}
 
-	panel->bd->props.max_brightness = UI_MAX_BRIGHTNESS;
+	panel->bd->props.max_brightness = EXTEND_BRIGHTNESS;
 	panel->bd->props.brightness = UI_DEFAULT_BRIGHTNESS;
 
 	panel->cur_acl = OLED_ACL_UNDEFINED;

@@ -627,7 +627,6 @@ static int decon_union(struct decon_rect *r1,
 }
 #endif
 
-#ifdef CONFIG_FB_WINDOW_UPDATE
 static bool is_decon_rect_differ(struct decon_rect *r1,
                 struct decon_rect *r2)
 {
@@ -639,7 +638,6 @@ static inline bool does_layer_need_scale(struct decon_win_config *config)
 {
 	return (config->dst.w != config->src.w) || (config->dst.h != config->src.h);
 }
-#endif
 
 static inline bool is_decon_opaque_format(int format)
 {
@@ -1512,6 +1510,16 @@ err:
 				decon->state, pm_runtime_active(decon->dev));
 	if (state != DECON_STATE_LPD_EXIT_REQ)
 		mutex_unlock(&decon->output_lock);
+
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	if (decon->hall_ic_state != get_panel_index_init()) {
+		if (decon->esd.esd_wq) {
+			decon->esd.queuework_pending = 1;
+			queue_work(decon->esd.esd_wq, &decon->esd.esd_work);
+			decon_info("%s : queue to flip\n", __func__);
+		}
+	}
+#endif
 	return ret;
 }
 
@@ -1524,6 +1532,7 @@ int decon_disable(struct decon_device *decon)
 	int state = decon->state;
 	int old_plane_cnt[MAX_DECON_EXT_WIN];
 	struct esd_protect *esd = &decon->esd;
+	struct dsim_device *dsim = NULL;
 
 	exynos_ss_printk("disable decon-%s, state(%d) cnt %d\n", decon->id ? "ext" : "int",
 				decon->state, pm_runtime_active(decon->dev));
@@ -1595,6 +1604,17 @@ int decon_disable(struct decon_device *decon)
 		decon_mdnie_stop(decon->mdnie);
 #endif
 
+	if (decon->pdata->psr_mode == DECON_VIDEO_MODE) {
+		for (i = 0 ; i < decon->pdata->max_win ; i++)
+			decon_reg_set_winmap(decon->id, i, 0x000000 /* black */, 1);
+		decon_reg_update_standalone(decon->id);
+		decon_reg_wait_for_update_timeout(decon->id, 300 * 1000);
+
+		/*screeen off early in video_mode*/
+		dsim = container_of(decon->output_sd, struct dsim_device, sd);
+		call_panel_ops(dsim, suspend, dsim);
+	}
+
 	decon_to_psr_info(decon, &psr);
 	decon_reg_stop(decon->id, decon->pdata->dsi_mode, &psr);
 	decon_reg_clear_int(decon->id);
@@ -1648,6 +1668,7 @@ int decon_disable(struct decon_device *decon)
 					__func__, decon->output_sd->name);
 			goto err;
 		}
+#ifdef CONFIG_FB_WINDOW_UPDATE
 		/* in case of output type is dsim, clear partial update info*/
 		if ((decon->out_type == DECON_OUT_DSI) && decon->need_update) {
 			decon->update_win.x = 0;
@@ -1655,6 +1676,7 @@ int decon_disable(struct decon_device *decon)
 			decon->update_win.w = 0;
 			decon->update_win.h = 0;
 		}
+#endif
 		decon->state = DECON_STATE_LPD;
 	} else {
 		if (decon->out_type != DECON_OUT_WB) {
@@ -3217,11 +3239,13 @@ static void decon_set_smart_dma_blocking(struct decon_device *decon,
 	if ((regs->num_of_window <= 1) || !win_id)
 		goto skip_crc_check;
 
+#ifdef CONFIG_FB_WINDOW_UPDATE
 	/* If window update is enabled, skip blocking mode */
 	if ((decon->need_update || regs->need_update) &&
 		((regs->update_win.w != lcd_info->xres) ||
 			(regs->update_win.h != lcd_info->yres)))
 		goto skip_crc_check;
+#endif
 
 	if (!(regs->wincon[win_id] & WINCON_ENWIN))
 		goto skip_crc_check;
@@ -3778,6 +3802,9 @@ static int decon_set_win_config(struct decon_device *decon,
 	int fd;
 	unsigned int bw = 0;
 	int plane_cnt = 0;
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	bool locked = false;
+#endif
 
 #ifdef CONFIG_LCD_ALPM
 	struct dsim_device *dsim = NULL;
@@ -3790,7 +3817,14 @@ static int decon_set_win_config(struct decon_device *decon,
 	if (fd < 0)
 		return fd;
 
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	if (decon->panel_flipping == false) {
+		locked = true;
+		mutex_lock(&decon->output_lock);
+	}
+#else
 	mutex_lock(&decon->output_lock);
+#endif
 
 	if ((decon->state == DECON_STATE_OFF) || (decon->ignore_vsync == true) ||
 		(decon->out_type == DECON_OUT_TUI)) {
@@ -3968,7 +4002,13 @@ static int decon_set_win_config(struct decon_device *decon,
 				&decon->update_regs_work);
 	}
 err:
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	if (locked == true) {
+		mutex_unlock(&decon->output_lock);
+	}
+#else
 	mutex_unlock(&decon->output_lock);
+#endif
 	return ret;
 }
 
@@ -4787,6 +4827,11 @@ static int decon_esd_panel_reset(struct decon_device *decon)
 
 	decon_info("++ %s\n", __func__);
 
+	if (decon->hall_ic_state == get_panel_index_init()) {
+		decon_warn("panel selection is same:%d\n", decon->hall_ic_state);
+		return ret;
+	}
+
 	if (decon->state == DECON_STATE_OFF) {
 		decon_warn("decon%d status is inactive\n", decon->id);
 		return ret;
@@ -4796,6 +4841,9 @@ static int decon_esd_panel_reset(struct decon_device *decon)
 
 	decon_lpd_block_exit(decon);
 
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	decon->panel_flipping = true;
+#endif
 	mutex_lock(&decon->output_lock);
 
 	if (decon->pdata->psr_mode == DECON_MIPI_COMMAND_MODE)
@@ -4825,11 +4873,13 @@ static int decon_esd_panel_reset(struct decon_device *decon)
 	if (decon->pdata->psr_mode == DECON_MIPI_COMMAND_MODE)
 		decon->ignore_vsync = false;
 
+#ifdef CONFIG_FB_WINDOW_UPDATE
 	decon->need_update = true;
 	decon->update_win.x = 0;
 	decon->update_win.y = 0;
 	decon->update_win.w = decon->lcd_info->xres;
 	decon->update_win.h = decon->lcd_info->yres;
+#endif
 	decon->force_fullupdate = 1;
 #if 0
 	if (decon->pdata->trig_mode == DECON_HW_TRIG)
@@ -4848,6 +4898,9 @@ static int decon_esd_panel_reset(struct decon_device *decon)
 reset_exit:
 #endif
 	mutex_unlock(&decon->output_lock);
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	decon->panel_flipping = false;
+#endif
 
 	decon_lpd_unblock(decon);
 
@@ -4860,6 +4913,9 @@ reset_fail:
 		decon->ignore_vsync = false;
 
 	mutex_unlock(&decon->output_lock);
+#ifdef CONFIG_FOLDER_DUAL_PANEL
+	decon->panel_flipping = false;
+#endif
 
 	decon_lpd_unblock(decon);
 
@@ -5014,9 +5070,10 @@ void decon_display_switch_by_hall(int hall_ic_state)
 		esd->queuework_pending = 1;
 		if (!queue_work(esd->esd_wq, &esd->esd_work))
 			decon_info("%s : work was already on queue\n", __func__);
+		else
+			decon_info("%s : queue to flip\n", __func__);
 	}
 
-	decon_info("%s : queue to flip\n", __func__);
 	return;
 }
 EXPORT_SYMBOL(decon_display_switch_by_hall);
@@ -5061,8 +5118,11 @@ static int decon_register_esd_funcion(struct decon_device *decon)
 		ret ++;
 	}
 
+#ifndef CONFIG_FOLDER_DUAL_PANEL
+	// folder uses ESD workqueue to flip panel
 	if (ret == 0)
 		goto register_exit;
+#endif
 
 	esd->esd_wq = create_singlethread_workqueue("decon_esd");
 
@@ -5100,7 +5160,9 @@ static int decon_register_esd_funcion(struct decon_device *decon)
 
 	esd->queuework_pending = 0;
 
+#ifndef CONFIG_FOLDER_DUAL_PANEL
 register_exit:
+#endif
 	dsim_info(" - %s \n", __func__);
 	return ret;
 
@@ -5351,11 +5413,16 @@ static int decon_probe(struct platform_device *pdev)
 	if (ret)
 		goto fail_entity;
 
-	/* TBD: Splash: stop video output for video mode */
+	/* Splash: stop DMA to avoid SYSMMU fault for video mode */
 	if (decon->pdata->psr_mode == DECON_VIDEO_MODE) {
-		dsim = container_of(decon->output_sd, struct dsim_device, sd);
-		call_panel_ops(dsim, suspend, dsim);
-		decon_reg_direct_on_off(decon->id, 0);
+		decon_to_psr_info(decon, &psr);
+		/* enable vsyn interrupt for video mode */
+		decon_reg_set_int(decon->id, &psr, DSI_MODE_SINGLE, 1);
+		decon_reg_set_winmap(decon->id, 0, 0x000000 /* black */, 1);
+
+		decon_reg_update_standalone(decon->id);
+		decon_reg_wait_for_update_timeout(decon->id, 300 * 1000);
+		decon_wait_for_vsync(decon, VSYNC_TIMEOUT_MSEC);
 	}
 
 	/* register framebuffer */
@@ -5432,10 +5499,6 @@ static int decon_probe(struct platform_device *pdev)
 
 		decon_reg_init(decon->id, decon->pdata->dsi_mode, &p);
 
-		/* enable vsyn interrupt for video mode */
-		if (decon->pdata->psr_mode == DECON_VIDEO_MODE)
-			decon_reg_set_int(decon->id, &psr, DSI_MODE_SINGLE, 1);
-
 		win_regs.wincon = WINCON_BPPMODE_ARGB8888;
 		win_regs.winmap = 0x0;
 		win_regs.vidosd_a = vidosd_a(0, 0);
@@ -5476,7 +5539,7 @@ decon_init_done:
 
 			if (dsim) {
 				panel = &dsim->priv;
-				if ((panel) && (!panel->lcdConnected)) {
+				if ((panel) && (!panel->lcdConnected[0])) {
 					decon->ignore_vsync = true;
 					dsim_info("decon does not found panel activate vsync ignore\n");
 					goto decon_rest_init;
@@ -5589,6 +5652,7 @@ decon_rest_init:
 
 #ifdef CONFIG_CUSTOM_INIT_LOGO
 	if (!decon->id){
+		msleep(50);
 		show_custom_logo();
 	}
 #endif

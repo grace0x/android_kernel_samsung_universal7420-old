@@ -776,7 +776,7 @@ close_fp_out:
   success : ret >= 0
   fail : ret < 0
  */
-int set_param(unsigned long offset, char val)
+int sec_set_param(unsigned long offset, char val)
 {
 	int ret = -1;
 
@@ -785,9 +785,17 @@ int set_param(unsigned long offset, char val)
 	if ((offset < CM_OFFSET) || (offset > CM_OFFSET + CM_OFFSET_LIMIT))
 		goto unlock_out;
 
-	if ((val != '0') && (val != '1'))
+	switch(val) {
+	case PARAM_OFF:
+	case PARAM_ON:
+		goto set_param;
+	default:
+		if (val >= PARAM_TEST0 && val < PARAM_MAX)
+			goto set_param;
 		goto unlock_out;
+	}
 
+set_param:
 	sec_param_data.offset = offset;
 	sec_param_data.val = val;
 

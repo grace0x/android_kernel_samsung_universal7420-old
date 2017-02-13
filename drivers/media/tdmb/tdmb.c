@@ -536,6 +536,10 @@ static long tdmb_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	unsigned long fig_freq = 0;
 	struct ensemble_info_type *ensemble_info;
 	struct tdmb_dm dm_buff;
+#ifdef TDMB_FCI_PTCHECK
+	struct ioctl_info info;
+	int err = 0, size = 0;
+#endif
 
 	DPRINTK("call tdmb_ioctl : 0x%x\n", cmd);
 
@@ -547,6 +551,10 @@ static long tdmb_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		DPRINTK("tdmb_ioctl : _IOC_NR(cmd) 0x%x\n", _IOC_NR(cmd));
 		return -EINVAL;
 	}
+
+#ifdef TDMB_FCI_PTCHECK
+	size = _IOC_SIZE(cmd);
+#endif
 
 	switch (cmd) {
 	case IOCTL_TDMB_GET_DATA_BUFFSIZE:
@@ -670,7 +678,57 @@ static long tdmb_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			tdmb_last_ch = 0;
 		mutex_unlock(&tdmb_lock);
 		break;
-
+#ifdef TDMB_FCI_PTCHECK
+	case IOCTL_TDMB_TS_START:
+		DPRINTK("IOCTL_TDMB_TS_START\n");
+		tdmb_last_ch = 0xabcd;	//jgk: temporal value, ptcheck does not use it actually
+		break;
+	case IOCTL_TDMB_TS_STOP:
+		DPRINTK("IOCTL_TDMB_TS_STOP\n");
+		break;
+	case IOCTL_TDMB_BYTE_WRITE:
+		if (tdmbdrv_func->byte_write != NULL) {
+			err = copy_from_user((void*)&info, (void*)arg, size);
+			DPRINTK("IOCTL_TDMB_BYTE_WRITE addr(0x%x), data(0x%x)\n", (u32)info.buff[0], (u32)info.buff[1]);
+			ret = tdmbdrv_func->byte_write((u16)info.buff[0], (u8)info.buff[1]);
+			if (ret)
+				DPRINTK("IOCTL_TDMB_BYTE_WRITE fail(0x%x)\n", ret);
+		} else
+			DPRINTK("IOCTL_TDMB_BYTE_WRITE is NULL\n");
+		break;
+	case IOCTL_TDMB_BYTE_READ:
+		if (tdmbdrv_func->byte_read != NULL) {
+			err = copy_from_user((void *)&info, (void *)arg, size);
+			DPRINTK("IOCTL_TDMB_BYTE_READ addr(0x%x), data(0x%x)\n", (u32)info.buff[0], (u32)info.buff[1]);
+			ret = tdmbdrv_func->byte_read((u16)info.buff[0], (u8*)(&info.buff[1]));
+			if (ret)
+				DPRINTK("IOCTL_TDMB_BYTE_READ fail(0x%x)\n", ret);
+			err |= copy_to_user((void *)arg, (void *)&info, size);
+		} else
+			DPRINTK("IOCTL_TDMB_BYTE_READ is NULL\n");
+		break;
+	case IOCTL_TDMB_WORD_WRITE:
+		if (tdmbdrv_func->word_write != NULL) {
+			err = copy_from_user((void*)&info, (void*)arg, size);
+			DPRINTK("IOCTL_TDMB_WORD_WRITE addr(0x%x), data(0x%x)\n", (u32)info.buff[0], (u32)info.buff[1]);
+			ret = tdmbdrv_func->word_write((u16)info.buff[0], (u16)info.buff[1]);
+			if (ret)
+				DPRINTK("IOCTL_TDMB_WORD_WRITE fail(0x%x)\n", ret);
+		} else
+			DPRINTK("IOCTL_TDMB_WORD_WRITE is NULL\n");
+		break;
+	case IOCTL_TDMB_WORD_READ:
+		if (tdmbdrv_func->word_read != NULL) {
+			err = copy_from_user((void *)&info, (void *)arg, size);
+			DPRINTK("IOCTL_TDMB_WORD_READ addr(0x%x), data(0x%x)\n", (u32)info.buff[0], (u32)info.buff[1]);
+			ret = tdmbdrv_func->word_read((u16)info.buff[0], (u16*)(&info.buff[1]));
+			if (ret)
+				DPRINTK("IOCTL_TDMB_WORD_READ fail(0x%x)\n", ret);
+			err |= copy_to_user((void *)arg, (void *)&info, size);
+		} else
+			DPRINTK("IOCTL_TDMB_WORD_READ is NULL\n");
+		break;
+#endif
 	case IOCTL_TDMB_GET_DM:
 		mutex_lock(&tdmb_lock);
 		if (!tdmb_pwr_on) {
@@ -716,6 +774,14 @@ static long tdmb_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long
 	case IOCTL_TDMB_ASSIGN_CH_TEST:
 	case IOCTL_TDMB_GET_DM:
 	case IOCTL_TDMB_SET_AUTOSTART:
+#ifdef TDMB_FCI_PTCHECK
+	case IOCTL_TDMB_TS_START:
+	case IOCTL_TDMB_TS_STOP:
+	case IOCTL_TDMB_BYTE_WRITE:
+	case IOCTL_TDMB_BYTE_READ:
+	case IOCTL_TDMB_WORD_WRITE:
+	case IOCTL_TDMB_WORD_READ:
+#endif
 		return tdmb_ioctl(filp, cmd, arg);
 	}
 	return -ENOIOCTLCMD;

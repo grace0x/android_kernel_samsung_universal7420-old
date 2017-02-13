@@ -60,6 +60,27 @@ ecryptfs_encrypt_page_offset(struct ecryptfs_crypt_stat *crypt_stat,
 			     struct page *src_page, int src_offset, int size,
 			     unsigned char *iv);
 
+#ifdef CONFIG_CRYPTO_FIPS
+
+/**
+ * crypto_cc_rng_get_bytes
+ * @data: Buffer to get random bytes
+ * @len: the lengh of random bytes
+ */
+static int crypto_cc_rng_get_bytes(u8 *data, unsigned int len)
+{
+    struct crypto_rng *drng = NULL;
+    int err;
+ 
+    drng = crypto_alloc_rng("stdrng", 0, 0);
+    err = crypto_rng_get_bytes(drng, data, len);
+    if (err != len)
+        ecryptfs_printk(KERN_ERR, "Error getting random bytes in CC mode (err=%d, len=%d)\n", err, len);
+    crypto_free_rng(drng);
+    return err;
+}
+#endif
+
 /**
  * ecryptfs_to_hex
  * @dst: Buffer to take hex character representation of contents of
@@ -1213,12 +1234,21 @@ out:
 
 static void ecryptfs_generate_new_key(struct ecryptfs_crypt_stat *crypt_stat)
 {
+#ifdef CONFIG_CRYPTO_FIPS
+#if defined(CONFIG_DW_MMC_FMP_ECRYPT_FS) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
+	if (crypt_stat->mount_crypt_stat->cipher_code == RFC2440_CIPHER_AES_XTS_256)
+		crypto_cc_rng_get_bytes(crypt_stat->key, crypt_stat->key_size * 2);
+	else
+#endif
+		crypto_cc_rng_get_bytes(crypt_stat->key, crypt_stat->key_size);
+#else
 #if defined(CONFIG_DW_MMC_FMP_ECRYPT_FS) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
 	if (crypt_stat->mount_crypt_stat->cipher_code == RFC2440_CIPHER_AES_XTS_256)
 		get_random_bytes(crypt_stat->key, crypt_stat->key_size * 2);
 	else
 #endif
 		get_random_bytes(crypt_stat->key, crypt_stat->key_size);
+#endif
 	crypt_stat->flags |= ECRYPTFS_KEY_VALID;
 	ecryptfs_compute_root_iv(crypt_stat);
 	if (unlikely(ecryptfs_verbosity > 0)) {
@@ -1309,6 +1339,9 @@ static void ecryptfs_set_default_crypt_stat_vals(
 	crypt_stat->mount_crypt_stat = mount_crypt_stat;
 #ifdef CONFIG_SDP
 	crypt_stat->engine_id = -1;
+#endif
+#ifdef CONFIG_DLP
+	memset(&crypt_stat->expiry, 0, sizeof(struct knox_dlp_data));
 #endif
 }
 
@@ -1453,7 +1486,11 @@ static int ecryptfs_process_flags(struct ecryptfs_crypt_stat *crypt_stat,
 static void write_ecryptfs_marker(char *page_virt, size_t *written)
 {
 	u32 m_1, m_2;
+#ifdef CONFIG_CRYPTO_FIPS
+	crypto_cc_rng_get_bytes((unsigned char*)&m_1, (MAGIC_ECRYPTFS_MARKER_SIZE_BYTES / 2));
+#else
 	get_random_bytes(&m_1, (MAGIC_ECRYPTFS_MARKER_SIZE_BYTES / 2));
+#endif
 	m_2 = (m_1 ^ MAGIC_ECRYPTFS_MARKER);
 	put_unaligned_be32(m_1, page_virt);
 	page_virt += (MAGIC_ECRYPTFS_MARKER_SIZE_BYTES / 2);
@@ -2230,7 +2267,11 @@ ecryptfs_process_key_cipher(struct crypto_blkcipher **key_tfm,
 
 		*key_size = alg->max_keysize;
 	}
+#ifdef CONFIG_CRYPTO_FIPS
+	crypto_cc_rng_get_bytes(dummy_key, *key_size);
+#else
 	get_random_bytes(dummy_key, *key_size);
+#endif
 	rc = crypto_blkcipher_setkey(*key_tfm, dummy_key, *key_size);
 	if (rc) {
 		printk(KERN_ERR "Error attempting to set key of size [%zd] for "

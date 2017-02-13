@@ -130,6 +130,12 @@ config CAMERA_SENSOR_IMX240_OBJ
         default n
         help
           Use to build IMX240 camera sensor.
+config CAMERA_SENSOR_4H9_OBJ
+        bool "Use 4H9 camera sensor"
+        depends on VIDEO_EXYNOS_FIMC_IS
+        default n
+        help
+          Use to build 4H9 camera sensor.
 config CAMERA_SENSOR_4H5_OBJ
         bool "Use 4H5 camera sensor"
         depends on VIDEO_EXYNOS_FIMC_IS
@@ -160,3 +166,9 @@ config CAMERA_SENSOR_5E3_OBJ
         default n
         help
           Use to build 5E3 camera sensor.
+config CAMERA_SENSOR_3P3_OBJ
+        bool "Use 3P3 camera sensor"
+        depends on VIDEO_EXYNOS_FIMC_IS
+        default n
+        help
+          Use to build 3P3 camera sensor.

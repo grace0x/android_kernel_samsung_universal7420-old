@@ -1,14 +1,7 @@
 #ifndef __MDNIE_H__
 #define __MDNIE_H__
 
-#define END_SEQ	0xffff
-
-
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 typedef u8 mdnie_t;
-#else
-typedef u16 mdnie_t;
-#endif
 
 enum MODE {
 	DYNAMIC,
@@ -33,7 +26,7 @@ enum SCENARIO {
 	HMT_16_MODE,
 	SCENARIO_MAX,
 	DMB_NORMAL_MODE = 20,
-	DMB_MODE_MAX,
+	DMB_MODE_MAX
 };
 
 enum BYPASS {
@@ -55,10 +48,9 @@ enum ACCESSIBILITY {
 enum HBM {
 	HBM_OFF,
 	HBM_ON,
-	HBM_ON_TEXT,
-	HBM_MAX,
+	HBM_MAX
 };
-#ifdef CONFIG_LCD_HMT
+
 enum hmt_mode {
 	HMT_MDNIE_OFF,
 	HMT_MDNIE_ON,
@@ -66,93 +58,70 @@ enum hmt_mode {
 	HMT_4000K,
 	HMT_6400K,
 	HMT_7500K,
-	HMT_MDNIE_MAX,
-};
-#endif
-
-enum MDNIE_CMD {
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	LEVEL1_KEY_UNLOCK,
-	MDNIE_CMD1,
-	MDNIE_CMD2,
-	LEVEL1_KEY_LOCK,
-	MDNIE_CMD_MAX,
-#else
-	MDNIE_CMD1,
-	MDNIE_CMD2 = MDNIE_CMD1,
-	MDNIE_CMD_MAX,
-#endif
+	HMT_MDNIE_MAX
 };
 
-struct mdnie_command {
-	mdnie_t *sequence;
-	unsigned int size;
+struct mdnie_seq_info {
+	mdnie_t *cmd;
+	unsigned int len;
 	unsigned int sleep;
 };
 
 struct mdnie_table {
 	char *name;
-	struct mdnie_command tune[MDNIE_CMD_MAX];
+	unsigned int update_flag[4];
+	struct mdnie_seq_info seq[4 + 1];
 };
 
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-#define MDNIE_SET(id)	\
-{							\
-	.name		= #id,				\
-	.tune		= {				\
-		{	.sequence = LEVEL1_UNLOCK, .size = ARRAY_SIZE(LEVEL1_UNLOCK),	.sleep = 0,},	\
-		{	.sequence = id##_1, .size = ARRAY_SIZE(id##_1),			.sleep = 0,},	\
-		{	.sequence = id##_2, .size = ARRAY_SIZE(id##_2),			.sleep = 0,},	\
-		{	.sequence = LEVEL1_LOCK, .size = ARRAY_SIZE(LEVEL1_LOCK),	.sleep = 0,},	\
-	}	\
-}
+struct mdnie_scr_info {
+	u32 index;
+	u32 color_blind;	/* Cyan Red */
+	u32 white_r;
+	u32 white_g;
+	u32 white_b;
+};
+
+struct mdnie_tune {
+	struct mdnie_table	*bypass_table;
+	struct mdnie_table	*accessibility_table;
+	struct mdnie_table	*hbm_table;
+	struct mdnie_table	*hmt_table;
+	struct mdnie_table	(*main_table)[MODE_MAX];
+	struct mdnie_table	*dmb_table;
+
+	struct mdnie_scr_info	*scr_info;
+	unsigned char **coordinate_table;
+	int (*get_hbm_index)(int);
+	int (*color_offset[])(int, int);
+};
 
 struct mdnie_ops {
-	int (*write)(void *data, struct mdnie_command *seq, u32 len);
+	int (*write)(void *data, struct mdnie_seq_info *seq, u32 len);
 	int (*read)(void *data, u8 addr, mdnie_t *buf, u32 len);
 };
 
-typedef int (*mdnie_w)(void *devdata, struct mdnie_command *seq, u32 len);
+typedef int (*mdnie_w)(void *devdata, struct mdnie_seq_info *seq, u32 len);
 typedef int (*mdnie_r)(void *devdata, u8 addr, u8 *buf, u32 len);
-#else
-#define MDNIE_SET(id)	\
-{							\
-	.name		= #id,				\
-	.tune		= {				\
-		{	.sequence = id##_1, .size = ARRAY_SIZE(id##_1), .sleep = 0,},	\
-	}	\
-}
 
-struct mdnie_ops {
-	int (*write)(unsigned int a, unsigned int v);
-	int (*read)(unsigned int a);
-};
-
-typedef int (*mdnie_w)(unsigned int a, unsigned int v);
-typedef int (*mdnie_r)(unsigned int a);
-#endif
 
 struct mdnie_info {
-	struct clk		*bus_clk;
-	struct clk		*clk;
-
 	struct device		*dev;
 	struct mutex		dev_lock;
 	struct mutex		lock;
 
 	unsigned int		enable;
 
+	struct mdnie_tune	*tune;
+
 	enum SCENARIO		scenario;
 	enum MODE		mode;
 	enum BYPASS		bypass;
 	enum HBM		hbm;
-#ifdef CONFIG_LCD_HMT
-	enum hmt_mode	hmt_mode;
-#endif
+	enum hmt_mode		hmt_mode;
+
 	unsigned int		tuning;
 	unsigned int		accessibility;
 	unsigned int		color_correction;
-	unsigned int		auto_brightness;
 
 	char			path[50];
 
@@ -167,31 +136,14 @@ struct mdnie_info {
 	unsigned int white_b;
 	struct mdnie_table table_buffer;
 	mdnie_t sequence_buffer[256];
-	u16 coordinate[2];
-#if defined(CONFIG_EXYNOS_DECON_MDNIE)
-	mdnie_t *lpd_store_data;
-	unsigned int need_update;
-#endif
-
+	unsigned int coordinate[2];
 };
 
 extern int mdnie_calibration(int *r);
 extern int mdnie_open_file(const char *path, char **fp);
-
-#if defined(CONFIG_EXYNOS_DECON_MDNIE)
-extern struct mdnie_info* decon_mdnie_register(void);
-extern void decon_mdnie_start(struct mdnie_info *mdnie, u32 w, u32 h);
-extern void decon_mdnie_stop(struct mdnie_info *mdnie);
-extern void decon_mdnie_frame_update(struct mdnie_info *mdnie, u32 xres, u32 yres);
-extern u32 decon_mdnie_input_read(void);
-#elif defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, u16 *coordinate, int id);
-
-#endif
-
-#if defined(CONFIG_EXYNOS_DECON_DUAL_DISPLAY) && defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-extern int mdnie2_register(struct device *p, void *data, mdnie_w w, mdnie_r r);
-#endif
-extern struct mdnie_table *mdnie_request_table(char *path, struct mdnie_table *s);
+extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, unsigned int *coordinate, struct mdnie_tune *tune);
+extern uintptr_t mdnie_request_table(char *path, struct mdnie_table *s);
+extern ssize_t attr_store_for_each(struct class *cls, const char *name, const char *buf, size_t size);
+extern struct class *get_mdnie_class(void);
 
 #endif /* __MDNIE_H__ */

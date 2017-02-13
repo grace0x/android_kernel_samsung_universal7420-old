@@ -38,6 +38,17 @@
 #include "secgpio_dvs.h"
 #endif
 
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+#ifdef CONFIG_FB
+#include <linux/smc.h>
+extern int vfsspi_goto_suspend;
+#endif
+#endif
+
+#if (defined(CONFIG_ESE_GEM_LSI) && defined(CONFIG_SEC_FACTORY))
+#undef CONFIG_ESE_SECURE_ENABLE
+#endif
+
 #define GROUP_SUFFIX		"-grp"
 #define GSUFFIX_LEN		sizeof(GROUP_SUFFIX)
 #define FUNCTION_SUFFIX		"-mux"
@@ -1564,6 +1575,13 @@ static void samsung_pinctrl_restore_regs(
 			continue;
 
 #ifdef ENABLE_SENSORS_FPRINT_SECURE
+#ifdef CONFIG_FB
+		if (vfsspi_goto_suspend) {
+			vfsspi_goto_suspend = 0;
+			pr_info("%s: vfsspi_resume smc ret=%d, en:%d\n", __func__,
+					exynos_smc(0x83000022, 0, 0, 0), vfsspi_goto_suspend);
+		}
+#endif
 		if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
 			continue;
 #endif

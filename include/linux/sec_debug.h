@@ -57,13 +57,22 @@ extern void sec_debug_avc_log(char *fmt, ...);
 #define sec_debug_avc_log(a, ...)		do { } while(0)
 #endif
 
+/**
+ * sec_debug_tsp_log : Leave tsp log in tsp_msg file.
+ * ( Timestamp + Tsp logs )
+ * sec_debug_tsp_log_msg : Leave tsp log in tsp_msg file and
+ * add additional message between timestamp and tsp log.
+ * ( Timestamp + additional Message + Tsp logs )
+ */
 #ifdef CONFIG_SEC_DEBUG_TSP_LOG
 extern void sec_debug_tsp_log(char *fmt, ...);
+extern void sec_debug_tsp_log_msg(char *msg, char *fmt, ...);
 #ifdef CONFIG_TOUCHSCREEN_FTS
 extern void tsp_dump(void);
 #endif
 #else
 #define sec_debug_tsp_log(a, ...)		do { } while(0)
+#define sec_debug_tsp_log_msg(a,b,...)		do { } while(0)
 #endif
 
 #ifdef CONFIG_SEC_DEBUG_LAST_KMSG
@@ -74,8 +83,22 @@ extern void sec_debug_save_last_kmsg(unsigned char* head_ptr, unsigned char* cur
 
 #ifdef CONFIG_SEC_PARAM
 #define CM_OFFSET	0x700234
-#define CM_OFFSET_LIMIT	1
-int set_param(unsigned long offset, char val);
+#define CM_OFFSET_LIMIT	8
+enum
+{
+	PARAM_OFF = '0',
+	PARAM_ON = '1',
+};
+enum
+{
+	PARAM_TEST0 = 0,
+	PARAM_TEST1,
+	PARAM_TEST2,
+	PARAM_TEST3,
+	PARAM_MAX,
+};
+
+int sec_set_param(unsigned long offset, char val);
 #endif
 
 #endif /* SEC_DEBUG_H */

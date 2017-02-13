@@ -339,6 +339,7 @@ struct devfreq_thermal_work {
 	unsigned int thermal_level_ch3_cs1;
 	unsigned int polling_period;
 	unsigned long max_freq;
+	unsigned long min_freq;
 };
 
 typedef enum {

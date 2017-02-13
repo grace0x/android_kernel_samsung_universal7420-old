@@ -1115,6 +1115,8 @@ static void max77833_charger_function_control(
 		psy_do_property("battery", get,
 			POWER_SUPPLY_PROP_STATUS, battery_status);
 		if ((battery_status.intval == POWER_SUPPLY_STATUS_CHARGING) &&
+			(charger->cable_type != POWER_SUPPLY_TYPE_HV_MAINS) &&
+			(charger->cable_type != POWER_SUPPLY_TYPE_HV_ERR) &&
 			(charger->cable_type != POWER_SUPPLY_TYPE_WIRELESS) &&
 			(charger->cable_type != POWER_SUPPLY_TYPE_HV_WIRELESS) &&
 			(charger->cable_type != POWER_SUPPLY_TYPE_HV_WIRELESS_ETX) &&
@@ -1369,7 +1371,7 @@ static int max77833_chg_get_property(struct power_supply *psy,
 			int iin, v_chgin;
 			iin = max77833_get_chg_adc_data(charger, CHG_CNFG_20_ADC_CHG_SEL_IIN);
 			v_chgin = max77833_get_chg_adc_data(charger, CHG_CNFG_20_ADC_CHG_SEL_V_CHGIN);
-			pr_info("%s: imax(%dmA), iin(%dmA), v_chgin(%dmV)\n", __func__, charger->charging_current_max, iin, v_chgin);
+			pr_info("%s: imax(%dmA), iin(%dmA), v_chgin(%dmV)\n", __func__, val->intval, iin, v_chgin);
 		}
 
 		break;
@@ -1504,6 +1506,7 @@ static int max77833_chg_set_property(struct power_supply *psy,
 		break;
 	/* val->intval : charging current */
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		charger->charging_current_max = val->intval;
 		max77833_set_charge_current(charger,
 			val->intval);
 		max77833_set_input_current(charger,
@@ -2763,7 +2766,8 @@ static int __devinit max77833_charger_probe(struct platform_device *pdev)
 	return 0;
 
 err_wc_irq:
-	free_irq(charger->pdata->chg_irq, NULL);
+	if (charger->pdata->chg_irq)
+		free_irq(charger->pdata->chg_irq, charger);
 err_irq:
 	power_supply_unregister(&charger->psy_otg);
 err_power_supply_register_otg:
@@ -2790,8 +2794,12 @@ static int __devexit max77833_charger_remove(struct platform_device *pdev)
 		platform_get_drvdata(pdev);
 
 	destroy_workqueue(charger->wqueue);
-	free_irq(charger->wc_w_irq, NULL);
-	free_irq(charger->pdata->chg_irq, NULL);
+	free_irq(charger->wc_w_irq, charger);
+	free_irq(charger->irq_bypass, charger);
+	free_irq(charger->irq_batp, charger);
+	free_irq(charger->irq_aicl, charger);
+	if (charger->pdata->chg_irq)
+		free_irq(charger->pdata->chg_irq, charger);
 	power_supply_unregister(&charger->psy_chg);
 	mutex_destroy(&charger->charger_mutex);
 	kfree(charger);
@@ -2850,6 +2858,14 @@ static void max77833_charger_shutdown(struct device *dev)
 	reg_data = 0x00;
 	max77833_write_reg(charger->i2c,
 		MAX77833_CHG_REG_CNFG_07, reg_data);
+
+	free_irq(charger->wc_w_irq, charger);
+	free_irq(charger->irq_bypass, charger);
+	free_irq(charger->irq_batp, charger);
+	free_irq(charger->irq_aicl, charger);
+	if (charger->pdata->chg_irq)
+		free_irq(charger->pdata->chg_irq, charger);
+
 	pr_info("func:%s \n", __func__);
 }
 

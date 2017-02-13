@@ -99,7 +99,6 @@ struct panel_private {
 	unsigned char date[4];
 	unsigned int lcdConnected;
 	//unsigned int state;
-	unsigned int auto_brightness;
 	unsigned int br_index;
 	unsigned int acl_enable;
 	unsigned int caps_enable;
@@ -111,7 +110,6 @@ struct panel_private {
 	void *dim_data;
 	void *dim_info;
 	unsigned int *br_tbl;
-	unsigned int *hbm_inter_br_tbl;
 	unsigned char **hbm_tbl;
 	unsigned char **acl_cutoff_tbl;
 	unsigned char **acl_opr_tbl;
@@ -144,8 +142,9 @@ struct panel_private {
 	char hbm_elvss_comp;
 	unsigned char hbm_elvss;
 	unsigned int hbm_index;
-/* hbm interpolation for color weakness */
-	unsigned int weakness_hbm_comp;
+	unsigned int adaptive_control;
+	int lux;
+	struct class *mdnie_class;
 
 /*variable for A3 Line */
 	struct delayed_work octa_a3_read_data_work;

@@ -98,6 +98,8 @@ struct arizona_priv {
 	unsigned int out_up_delay;
 	unsigned int out_down_pending;
 	unsigned int out_down_delay;
+
+	bool edre_stereo_disable;	
 };
 
 #define ARIZONA_NUM_MIXER_INPUTS 134
@@ -349,6 +351,11 @@ extern int arizona_restore_sources(struct arizona *arizona,
 				   const int *sources,
 				   unsigned int *cache,
 				   int lim);
+
+extern int clearwater_edre_stereo_get(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol);
+extern int clearwater_edre_stereo_put(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol);
 
 extern void clearwater_spin_sysclk(struct arizona *arizona);
 

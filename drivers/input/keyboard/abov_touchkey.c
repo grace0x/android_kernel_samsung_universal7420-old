@@ -1673,7 +1673,7 @@ static int abov_parse_dt(struct device *dev,
 	ret = of_property_read_string(np, "abov,fw_path", (const char **)&pdata->fw_path);
 	if (ret) {
 		tk_debug_err(true, dev, "touchkey:failed to read fw_path %d\n", ret);
-		pdata->fw_path = TK_FW_PATH_BIN;
+		pdata->fw_path = NULL;
 	}
 	tk_debug_info(true, dev, "%s: fw path %s\n", __func__, pdata->fw_path);
 /*
@@ -1838,12 +1838,16 @@ static int abov_tk_probe(struct i2c_client *client,
 	info->touchkey_count = sizeof(touchkey_keycode) / sizeof(int);
 	i2c_set_clientdata(client, info);
 
-	ret = abov_tk_fw_check(info);
-	if (ret) {
-		tk_debug_err(true, &client->dev,
-			"failed to firmware check (%d)\n", ret);
-		goto err_reg_input_dev;
-	}
+	if (info->pdata->fw_path) {
+		ret = abov_tk_fw_check(info);
+		if (ret) {
+			tk_debug_err(true, &client->dev,
+				"failed to firmware check (%d)\n", ret);
+			goto err_reg_input_dev;
+		}
+	} else
+		tk_debug_info(true, &client->dev,
+				"skip firmware update on probe\n");
 
 	ret = get_tk_fw_version(info, false);
 	if (ret < 0) {

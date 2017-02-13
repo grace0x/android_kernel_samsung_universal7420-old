@@ -295,11 +295,8 @@
  * The minimum number of bits of entropy before we wake up a read on
  * /dev/random.  Should be enough to do a significant reseed.
  */
-#ifdef CONFIG_CRYPTO_FIPS
-static int random_read_wakeup_bits = 256;
-#else
 static int random_read_wakeup_bits = 64;
-#endif
+
 /*
  * If the entropy count falls under this number of bits, then we
  * should wake up processes which are selecting or polling on write

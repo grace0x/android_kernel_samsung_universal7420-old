@@ -216,10 +216,58 @@ S32 FIDC_DEC(U8 fic_cmd)
 
 S32 CA_DEC(U8 fic_cmd)
 {
-	U8 F_L, EXT;
+   	U8 Rfu, temp1, temp2, temp3, temp4;
+	U8 nLenSid;
+	S32 cnt;
+	struct FIG_TYPE6 type6Cas;
 
-	Get_Bits(2, &F_L);
-	Get_Bits(6, &EXT);
+	Get_Bits(1, &Rfu);
+	Get_Bits(1, &type6Cas.C_N);
+	Get_Bits(1, &type6Cas.OE);
+	Get_Bits(1, &type6Cas.P_D);
+	Get_Bits(1, &type6Cas.LEF);
+	Get_Bits(3, &type6Cas.ShortCASysId);
+
+	if (type6Cas.P_D) {
+		Get_Bytes(1, &temp1);
+		Get_Bytes(1, &temp2);
+		Get_Bytes(1, &temp3);
+		Get_Bytes(1, &temp4);
+
+		type6Cas.Sid = (temp1 << 24) | (temp2 << 16) | (temp3 << 8) | temp4;
+		nLenSid = 4;
+	} else {
+		Get_Bytes(1, &temp1);
+		Get_Bytes(1, &temp2);
+
+		type6Cas.Sid = (temp1 << 8) | temp2;
+		nLenSid = 2;
+	}
+
+	if (type6Cas.LEF) {
+		Get_Bytes(1, &temp1);
+		Get_Bytes(1, &temp2);
+
+		type6Cas.CASysId = (temp1 << 8) | temp2;
+
+		for(cnt = 0; cnt <sizeof(type6Cas.CAIntChar); cnt++) 
+			Get_Bytes(1, &type6Cas.CAIntChar[cnt]);
+	} else 
+		return RTV_OK;
+
+    //Copy to su channel Inform
+	for (cnt = 0; cnt<ENS_DESC.svr_comp_num; cnt++) {
+		if((ENS_DESC.svr_comp[cnt].Sid == type6Cas.Sid)
+			&& ENS_DESC.svr_comp[cnt].CA_flag) { //Check CA_flag is temp
+			ENS_DESC.svr_comp[cnt].CASid = type6Cas.CASysId;
+			memcpy(ENS_DESC.svr_comp[cnt].aCAIntChar,
+					type6Cas.CAIntChar,
+					sizeof(type6Cas.CAIntChar));
+
+			ENS_DESC.svr_comp[cnt].FIG6_exist_flag = 1;
+		}
+	}	
+
 	return RTV_OK;
 }
 
@@ -1211,10 +1259,11 @@ for (i = 0; i < ENS_DESC.svr_num; i++) {
 					= type0_ext13->User_APP_Type[k];
 				ENS_DESC.svr_comp[j].User_APP_data_length[k]
 					= type0_ext13->User_APP_data_length[k];
+
 				for (p = 0;
 				p < type0_ext13->User_APP_data_length[k]; p++)
-					ENS_DESC.svr_comp[j].User_APP_data[p]
-					= type0_ext13->User_APP_data[p];
+					ENS_DESC.svr_comp[j].User_APP_data[k][p]
+					= type0_ext13->User_APP_data[k][p] ;
 			}
 		}
 	}
@@ -1273,7 +1322,7 @@ S32 Get_FIG0_EXT13(U8 fic_cmd, U8 P_D, U8 C_N)
 */
 			for (p = 0; p < type0_ext13.User_APP_data_length[k]
 				; p++)
-				Get_Bytes(1, &type0_ext13.User_APP_data[p]);
+				Get_Bytes(1, &type0_ext13.User_APP_data[k][p]);
 
 		}
 
@@ -2483,10 +2532,11 @@ static U32 FIC_CONUT;
 static UINT fib_crc_err_cnt;
 S32 FIC_Init_Dec(U8 *fic, U8 fib_num, U8 CN)
 {
-	U32 i;
+	U32 i, j, k;
 	S32 ret;
 	UINT fib_crc_pos = 0;
 	UINT fib_crc_err_sum = 0;
+	struct ENSEMBLE_DESC *desc = &ENS_DESC;
 
 	FIC_CONUT++;
 
@@ -2507,6 +2557,19 @@ S32 FIC_Init_Dec(U8 *fic, U8 fib_num, U8 CN)
 					&& (ENS_DESC.label_flag == 1)
 					&& (FIC_CONUT > 5)) {
 					FIC_CONUT = 0;
+
+					for (i = 0; i < desc->svr_num; i++) {
+						for (j = 0; j < desc->svr_desc[i].Num_ser_comp; j++) {
+							k = desc->svr_desc[i].ser_comp_num[j];
+							if (desc->svr_comp[k].TMID == MSC_STREAM_DATA) {
+								if (desc->svr_comp[k].CA_flag == 1) {
+									if (desc->svr_comp[k].FIG6_exist_flag == 0)
+										return FIC_GOING;
+								}
+							}
+						}					
+					}
+
 					return FIC_DONE;
 				}
 			}
@@ -2618,6 +2681,73 @@ void rtvFICDEC_GetEnsembleInfo(struct ensemble_info_type *ensble,
 				ensble->sub_ch[subch_idx].scids
 					= desc->svr_comp[comp_idx].SCidS;
 				ensble->sub_ch[subch_idx].ecc = Ensemble_ECC;
+
+				ensble->sub_ch[subch_idx].ca_flags
+						= desc->svr_comp[comp_idx].CA_flag;
+				DPRINTK("%s: sub_channel_id(%d), ca_flags(%d)\n", __func__,
+					subch_idx, desc->svr_comp[comp_idx].CA_flag);
+#if 0//for HD-DMB, spec is not determined yet
+				if (desc->svr_comp[comp_idx].CA_flag == 1) {
+					if (desc->svr_comp[comp_idx].FIG6_exist_flag == 1) {
+						ensble->sub_ch[subch_idx].ca_sys_id
+							= desc->svr_comp[comp_idx].CASid;
+						memcpy(ensble->sub_ch[subch_idx].ca_int_char,
+								desc->svr_comp[comp_idx].aCAIntChar,
+								24);
+						DPRINTK("%s: ca_sys_id(0x%04x), fig6_exist_flag(%d)\n", __func__,
+							desc->svr_comp[comp_idx].CASid,
+							desc->svr_comp[comp_idx].FIG6_exist_flag);
+						DPRINTK("%s: ca_int_char: %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x\n",
+							__func__,
+							desc->svr_comp[comp_idx].aCAIntChar[0], desc->svr_comp[comp_idx].aCAIntChar[1],
+							desc->svr_comp[comp_idx].aCAIntChar[2], desc->svr_comp[comp_idx].aCAIntChar[3],
+							desc->svr_comp[comp_idx].aCAIntChar[4], desc->svr_comp[comp_idx].aCAIntChar[5],
+							desc->svr_comp[comp_idx].aCAIntChar[6], desc->svr_comp[comp_idx].aCAIntChar[7],
+							desc->svr_comp[comp_idx].aCAIntChar[8], desc->svr_comp[comp_idx].aCAIntChar[9],
+							desc->svr_comp[comp_idx].aCAIntChar[10], desc->svr_comp[comp_idx].aCAIntChar[11],
+							desc->svr_comp[comp_idx].aCAIntChar[12], desc->svr_comp[comp_idx].aCAIntChar[13],
+							desc->svr_comp[comp_idx].aCAIntChar[14], desc->svr_comp[comp_idx].aCAIntChar[15],
+							desc->svr_comp[comp_idx].aCAIntChar[16], desc->svr_comp[comp_idx].aCAIntChar[17],
+							desc->svr_comp[comp_idx].aCAIntChar[18], desc->svr_comp[comp_idx].aCAIntChar[19],
+							desc->svr_comp[comp_idx].aCAIntChar[20], desc->svr_comp[comp_idx].aCAIntChar[21],
+							desc->svr_comp[comp_idx].aCAIntChar[22], desc->svr_comp[comp_idx].aCAIntChar[23]);
+					}
+				}
+
+				DPRINTK("%s: num_of_user_appl(%d)\n", __func__,
+					desc->svr_comp[comp_idx].Num_User_App);
+				/* jgk: "num_of_user_appl" is always 0 or 1?
+					no case of more than 1?
+					below codes are valid only if "num_of_user_appl" is
+					either 0 or 1 only!!
+				*/
+				{
+					int k;
+					for (k = 0; k < desc->svr_comp[comp_idx].Num_User_App; k++) {
+						DPRINTK("%s: k(%d), app_type(0x%04x), data_len(%u), data %02x:%02x:%02x:%02x %02x:%02x:%02x:%02x\n",
+								__func__, k,
+								desc->svr_comp[comp_idx].User_APP_Type[k],
+								desc->svr_comp[comp_idx].User_APP_data_length[k],
+								desc->svr_comp[comp_idx].User_APP_data[k][0],
+								desc->svr_comp[comp_idx].User_APP_data[k][1],
+								desc->svr_comp[comp_idx].User_APP_data[k][2],
+								desc->svr_comp[comp_idx].User_APP_data[k][3],
+								desc->svr_comp[comp_idx].User_APP_data[k][4],
+								desc->svr_comp[comp_idx].User_APP_data[k][5],
+								desc->svr_comp[comp_idx].User_APP_data[k][6],
+								desc->svr_comp[comp_idx].User_APP_data[k][7]);
+
+						if (desc->svr_comp[comp_idx].User_APP_Type[k] == 0x09) {
+							ensble->sub_ch[subch_idx].user_application_type
+								= desc->svr_comp[comp_idx].User_APP_Type[k];
+							ensble->sub_ch[subch_idx].video_svc_obj_profile_id
+								= desc->svr_comp[comp_idx].User_APP_data[k][0];
+							ensble->sub_ch[subch_idx].main_object_type_id
+								= desc->svr_comp[comp_idx].User_APP_data[k][1];
+						}
+					}
+				}
+#endif
 				subch_idx++;
 				break;
 

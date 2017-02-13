@@ -25,11 +25,17 @@
 #include <linux/pinctrl/pinctrl-samsung.h>
 #include <linux/smc.h>
 
+#include <linux/regulator/consumer.h>
+#include <plat/gpio-cfg.h>
+
 #include <mach/exynos-pm.h>
+#include <linux/sec_sysfs.h>
 
 #include "dw_mmc.h"
 #include "dw_mmc-pltfm.h"
 #include "dw_mmc-exynos.h"
+
+#include <linux/modem_notifier.h>
 
 /* SFR save/restore for LPA */
 struct dw_mci *dw_mci_lpa_host[3] = {0, 0, 0};
@@ -38,6 +44,27 @@ unsigned int dw_mci_save_sfr[3][30];
 
 extern void dw_mci_ciu_reset(struct device *dev, struct dw_mci *host);
 extern bool dw_mci_fifo_reset(struct device *dev, struct dw_mci *host);
+
+static int dw_mmc_cp_notification_handler(struct notifier_block *nb,
+				unsigned long action, void *data)
+{
+	struct dw_mci *sdcard_host = container_of(nb, struct dw_mci, modemif_nb);
+	
+	if (!sdcard_host){
+		pr_err("%s host is null!!\n", __func__);
+		return -1;
+		}
+	else{
+		pr_err("%s CP notifier called, event = %ld\n", __func__, action);
+		sdcard_host->cp_event = action;
+
+		if (action == MODEM_EVENT_ONLINE){
+			pr_err("%s sd rescan called\n", __func__);
+			queue_work(sdcard_host->card_workqueue, &sdcard_host->card_work);
+		}
+		return 0;
+	}
+}
 
 /*
  * MSHC SFR save/restore
@@ -80,65 +107,100 @@ void dw_mci_reg_dump(struct dw_mci *host)
 	const struct dw_mci_drv_data *drv_data = host->drv_data;
 
 	dev_err(host->dev, ": ============== REGISTER DUMP ==============\n");
-	dev_err(host->dev, ": CTRL:	0x%08x\n", mci_readl(host, CTRL));
-	dev_err(host->dev, ": PWREN:	0x%08x\n", mci_readl(host, PWREN));
-	dev_err(host->dev, ": CLKDIV:	0x%08x\n", mci_readl(host, CLKDIV));
-	dev_err(host->dev, ": CLKSRC:	0x%08x\n", mci_readl(host, CLKSRC));
-	dev_err(host->dev, ": CLKENA:	0x%08x\n", mci_readl(host, CLKENA));
-	dev_err(host->dev, ": TMOUT:	0x%08x\n", mci_readl(host, TMOUT));
-	dev_err(host->dev, ": CTYPE:	0x%08x\n", mci_readl(host, CTYPE));
-	dev_err(host->dev, ": BLKSIZ:	0x%08x\n", mci_readl(host, BLKSIZ));
-	dev_err(host->dev, ": BYTCNT:	0x%08x\n", mci_readl(host, BYTCNT));
-	dev_err(host->dev, ": INTMSK:	0x%08x\n", mci_readl(host, INTMASK));
-	dev_err(host->dev, ": CMDARG:	0x%08x\n", mci_readl(host, CMDARG));
-	dev_err(host->dev, ": CMD:	0x%08x\n", mci_readl(host, CMD));
+	dev_err(host->dev, ": CTRL:	 0x%08x\n",
+			host->sfr_dump->contrl = mci_readl(host, CTRL));
+	dev_err(host->dev, ": PWREN:	 0x%08x\n",
+			host->sfr_dump->pwren = mci_readl(host, PWREN));
+	dev_err(host->dev, ": CLKDIV:	 0x%08x\n",
+			host->sfr_dump->clkdiv = mci_readl(host, CLKDIV));
+	dev_err(host->dev, ": CLKSRC:	 0x%08x\n",
+			host->sfr_dump->clksrc = mci_readl(host, CLKSRC));
+	dev_err(host->dev, ": CLKENA:	 0x%08x\n",
+			host->sfr_dump->clkena = mci_readl(host, CLKENA));
+	dev_err(host->dev, ": TMOUT:	 0x%08x\n",
+			host->sfr_dump->tmout = mci_readl(host, TMOUT));
+	dev_err(host->dev, ": CTYPE:	 0x%08x\n",
+			host->sfr_dump->ctype = mci_readl(host, CTYPE));
+	dev_err(host->dev, ": BLKSIZ:	 0x%08x\n",
+			host->sfr_dump->blksiz = mci_readl(host, BLKSIZ));
+	dev_err(host->dev, ": BYTCNT:	 0x%08x\n",
+			host->sfr_dump->bytcnt = mci_readl(host, BYTCNT));
+	dev_err(host->dev, ": INTMSK:	 0x%08x\n",
+			host->sfr_dump->intmask = mci_readl(host, INTMASK));
+	dev_err(host->dev, ": CMDARG:	 0x%08x\n",
+			host->sfr_dump->cmdarg = mci_readl(host, CMDARG));
+	dev_err(host->dev, ": CMD:	 0x%08x\n",
+			host->sfr_dump->cmd = mci_readl(host, CMD));
 	dev_err(host->dev, ": RESP0:	0x%08x\n", mci_readl(host, RESP0));
 	dev_err(host->dev, ": RESP1:	0x%08x\n", mci_readl(host, RESP1));
 	dev_err(host->dev, ": RESP2:	0x%08x\n", mci_readl(host, RESP2));
 	dev_err(host->dev, ": RESP3:	0x%08x\n", mci_readl(host, RESP3));
-	dev_err(host->dev, ": MINTSTS:	0x%08x\n", mci_readl(host, MINTSTS));
-	dev_err(host->dev, ": RINTSTS:	0x%08x\n", mci_readl(host, RINTSTS));
-	dev_err(host->dev, ": STATUS:	0x%08x\n", mci_readl(host, STATUS));
-	dev_err(host->dev, ": FIFOTH:	0x%08x\n", mci_readl(host, FIFOTH));
+	dev_err(host->dev, ": MINTSTS:	 0x%08x\n",
+			host->sfr_dump->mintsts = mci_readl(host, MINTSTS));
+	dev_err(host->dev, ": RINTSTS:	 0x%08x\n",
+			host->sfr_dump->rintsts = mci_readl(host, RINTSTS));
+	dev_err(host->dev, ": STATUS:	 0x%08x\n",
+			host->sfr_dump->status = mci_readl(host, STATUS));
+	dev_err(host->dev, ": FIFOTH:	 0x%08x\n",
+			host->sfr_dump->fifoth = mci_readl(host, FIFOTH));
 	dev_err(host->dev, ": CDETECT:	0x%08x\n", mci_readl(host, CDETECT));
 	dev_err(host->dev, ": WRTPRT:	0x%08x\n", mci_readl(host, WRTPRT));
 	dev_err(host->dev, ": GPIO:	0x%08x\n", mci_readl(host, GPIO));
-	dev_err(host->dev, ": TCBCNT:	0x%08x\n", mci_readl(host, TCBCNT));
-	dev_err(host->dev, ": TBBCNT:	0x%08x\n", mci_readl(host, TBBCNT));
+	dev_err(host->dev, ": TCBCNT:	 0x%08x\n",
+			host->sfr_dump->tcbcnt = mci_readl(host, TCBCNT));
+	dev_err(host->dev, ": TBBCNT:	 0x%08x\n",
+			host->sfr_dump->tbbcnt = mci_readl(host, TBBCNT));
 	dev_err(host->dev, ": DEBNCE:	0x%08x\n", mci_readl(host, DEBNCE));
 	dev_err(host->dev, ": USRID:	0x%08x\n", mci_readl(host, USRID));
 	dev_err(host->dev, ": VERID:	0x%08x\n", mci_readl(host, VERID));
 	dev_err(host->dev, ": HCON:	0x%08x\n", mci_readl(host, HCON));
-	dev_err(host->dev, ": UHS_REG:	0x%08x\n", mci_readl(host, UHS_REG));
-	dev_err(host->dev, ": BMOD:	0x%08x\n", mci_readl(host, BMOD));
-	dev_err(host->dev, ": PLDMND:	0x%08x\n", mci_readl(host, PLDMND));
+	dev_err(host->dev, ": UHS_REG:	 0x%08x\n",
+			host->sfr_dump->uhs_reg = mci_readl(host, UHS_REG));
+	dev_err(host->dev, ": BMOD:	 0x%08x\n",
+			host->sfr_dump->bmod = mci_readl(host, BMOD));
+	dev_err(host->dev, ": PLDMND:	 0x%08x\n", mci_readl(host, PLDMND));
 #if defined(CONFIG_SOC_EXYNOS7420) || defined(CONFIG_SOC_EXYNOS5433) || \
 	defined(CONFIG_SOC_EXYNOS7580)
-	dev_err(host->dev, ": DBADDRL:	0x%08x\n", mci_readl(host, DBADDRL));
-	dev_err(host->dev, ": DBADDRU:	0x%08x\n", mci_readl(host, DBADDRU));
-	dev_err(host->dev, ": DSCADDRL:	0x%08x\n", mci_readl(host, DSCADDRL));
-	dev_err(host->dev, ": DSCADDRU:	0x%08x\n", mci_readl(host, DSCADDRU));
-	dev_err(host->dev, ": BUFADDR:	0x%08x\n", mci_readl(host, BUFADDR));
-	dev_err(host->dev, ": BUFADDRU:	0x%08x\n", mci_readl(host, BUFADDRU));
+	dev_err(host->dev, ": DBADDRL:	 0x%08x\n",
+			host->sfr_dump->dbaddrl = mci_readl(host, DBADDRL));
+	dev_err(host->dev, ": DBADDRU:	 0x%08x\n",
+			host->sfr_dump->dbaddru = mci_readl(host, DBADDRU));
+	dev_err(host->dev, ": DSCADDRL:	 0x%08x\n",
+			host->sfr_dump->dscaddrl = mci_readl(host, DSCADDRL));
+	dev_err(host->dev, ": DSCADDRU:	 0x%08x\n",
+			host->sfr_dump->dscaddru = mci_readl(host, DSCADDRU));
+	dev_err(host->dev, ": BUFADDR:	 0x%08x\n",
+			host->sfr_dump->bufaddr = mci_readl(host, BUFADDR));
+	dev_err(host->dev, ": BUFADDRU:	 0x%08x\n",
+			host->sfr_dump->bufaddru = mci_readl(host, BUFADDRU));
 #else
-	dev_err(host->dev, ": DBADDR:	0x%08x\n", mci_readl(host, DBADDR));
-	dev_err(host->dev, ": DSCADDR:	0x%08x\n", mci_readl(host, DSCADDR));
-	dev_err(host->dev, ": BUFADDR:	0x%08x\n", mci_readl(host, BUFADDR));
+	dev_err(host->dev, ": DBADDR:	 0x%08x\n",
+			host->sfr_dump->dbaddr = mci_readl(host, DBADDR));
+	dev_err(host->dev, ": DSCADDR:	 0x%08x\n",
+			host->sfr_dump->dscaddr = mci_readl(host, DSCADDR));
+	dev_err(host->dev, ": BUFADDR:	 0x%08x\n",
+			host->sfr_dump->bufaddr = mci_readl(host, BUFADDR));
 #endif
-
-	dev_err(host->dev, ": IDSTS:	0x%08x\n", mci_readl(host, IDSTS));
-	dev_err(host->dev, ": IDINTEN:	0x%08x\n", mci_readl(host, IDINTEN));
+	dev_err(host->dev, ": IDSTS:	0x%08x\n",
+			host->sfr_dump->idsts64 = mci_readl(host, IDSTS));
+	dev_err(host->dev, ": IDINTEN:	0x%08x\n",
+			host->sfr_dump->idinten64 = mci_readl(host, IDINTEN));
 	dev_err(host->dev, ": SHA_CMD_IS:	0x%08x\n", mci_readl(host, SHA_CMD_IS));
 	if (drv_data && drv_data->register_dump)
 		drv_data->register_dump(host);
 	dw_mci_cmd_reg_summary(host);
 	dw_mci_status_reg_summary(host);
 	dev_err(host->dev, ": ============== STATUS DUMP ================\n");
-	dev_err(host->dev, ": cmd_status:      0x%08x\n", host->cmd_status);
-	dev_err(host->dev, ": data_status:     0x%08x\n", host->data_status);
-	dev_err(host->dev, ": pending_events:  0x%08lx\n", host->pending_events);
-	dev_err(host->dev, ": completed_events:0x%08lx\n", host->completed_events);
-	dev_err(host->dev, ": state:           %d\n", host->state_cmd);
+	dev_err(host->dev, ": cmd_status:      0x%08x\n",
+			host->sfr_dump->cmd_status = host->cmd_status);
+	dev_err(host->dev, ": data_status:     0x%08x\n",
+			host->sfr_dump->force_clk_stop = host->data_status);
+	dev_err(host->dev, ": pending_events:  0x%08x\n",
+			host->sfr_dump->pending_events = host->pending_events);
+	dev_err(host->dev, ": completed_events:0x%08x\n",
+			host->sfr_dump->completed_events  = host->completed_events);
+	dev_err(host->dev, ": state:           %d\n",
+			host->sfr_dump->host_state = host->state);
 	dev_err(host->dev, ": gate-clk:            %s\n",
 			      atomic_read(&host->ciu_clk_cnt) ?
 			      "enable" : "disable");
@@ -202,7 +264,7 @@ void dw_mci_exynos_cfg_smu(struct dw_mci *host)
 #ifdef CONFIG_CPU_IDLE
 #if defined(CONFIG_SOC_EXYNOS5433) || defined(CONFIG_SOC_EXYNOS7420) || \
 	defined(CONFIG_SOC_EXYNOS7580)
-static void dw_mci_exynos_smu_reset(struct dw_mci *host)
+void dw_mci_exynos_smu_reset(struct dw_mci *host)
 {
 	u32 i;
 	bool is_smu;
@@ -497,9 +559,11 @@ static void dw_mci_exynos_register_dump(struct dw_mci *host)
 	dev_err(host->dev, ": CLKSEL:	0x%08x\n", mci_readl(host, CLKSEL));
 	if (is_smu) {
 		dev_err(host->dev, ": EMMCP_BASE:	0x%08x\n",
-			mci_readl(host, EMMCP_BASE));
+			host->sfr_dump->fmp_emmcp_base = mci_readl(host, EMMCP_BASE));
+		dev_err(host->dev, ": MPSECURITY:	0x%08x\n",
+				host->sfr_dump->mpsecurity = mci_readl(host, MPSECURITY));
 		dev_err(host->dev, ": MPSTAT:	0x%08x\n",
-			mci_readl(host, MPSTAT));
+			host->sfr_dump->mpstat = mci_readl(host, MPSTAT));
 		for (i = 0; i < 8; i++) {
 			dev_err(host->dev, ": MPSBEGIN%d:	0x%08x\n", i,
 				__raw_readl(host->regs + SDMMC_MPSBEGIN0 + (0x10 * i)));
@@ -514,10 +578,12 @@ static void dw_mci_exynos_register_dump(struct dw_mci *host)
 		}
 	}
 	dev_err(host->dev, ": DDR200_RDDQS_EN:	0x%08x\n",
-		mci_readl(host, DDR200_RDDQS_EN));
+		host->sfr_dump->ddr200_rdqs_en = mci_readl(host,DDR200_RDDQS_EN));
 	dev_err(host->dev, ": DDR200_ASYNC_FIFO_CTRL:	0x%08x\n",
+		host->sfr_dump->ddr200_acync_fifo_ctrl =
 		mci_readl(host, DDR200_ASYNC_FIFO_CTRL));
 	dev_err(host->dev, ": DDR200_DLINE_CTRL:	0x%08x\n",
+		host->sfr_dump->ddr200_dline_ctrl =
 		mci_readl(host, DDR200_DLINE_CTRL));
 }
 
@@ -610,7 +676,7 @@ static void dw_mci_exynos_set_ios(struct dw_mci *host, unsigned int tuning, stru
 
 	cclkin = clk_tbl[timing];
 	rddqs = DWMCI_DDR200_RDDQS_EN_DEF;
-	dline = DWMCI_DDR200_DLINE_CTRL_DEF;
+	dline = mci_readl(host, DDR200_DLINE_CTRL);
 	clksel = mci_readl(host, CLKSEL);
 	clksel &= ~(BIT(19));
 
@@ -661,11 +727,12 @@ static void dw_mci_exynos_set_ios(struct dw_mci *host, unsigned int tuning, stru
 			host->quirks &= ~DW_MCI_QUIRK_NO_DETECT_EBIT;
 			clksel |= BIT(19);
 		}
-	} else if (timing == MMC_TIMING_MMC_HS200 ||
-			timing == MMC_TIMING_UHS_SDR104) {
-		clksel = (clksel & 0xfff8ffff) | (priv->selclk_drv << 16);
+	} else if (timing == MMC_TIMING_MMC_HS200) {
+		clksel = ((priv->hs200_timing & 0xfffffff8) | pdata->clk_smpl);
+	} else if (timing == MMC_TIMING_UHS_SDR104) {
+		clksel = ((priv->sdr104_timing & 0xfffffff8) | pdata->clk_smpl);
 	} else if (timing == MMC_TIMING_UHS_SDR50) {
-		clksel = (clksel & 0xfff8ffff) | (priv->selclk_drv << 16);
+		clksel = ((priv->sdr50_timing & 0xfffffff8) | pdata->clk_smpl);
 	} else if (timing == MMC_TIMING_UHS_DDR50) {
 		clksel = priv->ddr_timing;
 	} else if (timing == MMC_TIMING_MMC_HS || timing == MMC_TIMING_SD_HS) {
@@ -750,6 +817,16 @@ static int dw_mci_exynos_parse_dt(struct dw_mci *host)
 		priv->cd_gpio = of_get_named_gpio(np, "cd-gpio", 0);
 	else
 		priv->cd_gpio = -1;
+
+	if (of_get_property(np, "sec-sd-slot-type", NULL))
+		of_property_read_u32(np,
+			"sec-sd-slot-type", &priv->sec_sd_slot_type);
+	else {
+		if (priv->cd_gpio != -1) /* treat default SD slot if cd_gpio is defined */
+			priv->sec_sd_slot_type = SEC_HOTPLUG_SD_SLOT;
+		else
+			priv->sec_sd_slot_type = -1;
+	}
 
 	if (of_property_read_u32(np, "selclk_drv", &priv->selclk_drv))
 		priv->selclk_drv = 3;
@@ -837,9 +914,26 @@ static int dw_mci_exynos_parse_dt(struct dw_mci *host)
 		break;
 	/* dwmmc1 : SDIO    */
 	case 1:
-		break;
 	/* dwmmc2 : SD Card */
 	case 2:
+		ret = of_property_read_u32_array(np,
+			"samsung,dw-mshc-sdr50-timing", timing, 4);	/* SDR50 100Mhz */
+		if (!ret)
+			priv->sdr50_timing = SDMMC_CLKSEL_TIMING(timing[0], timing[1], timing[2], timing[3]);
+		else {
+			priv->sdr50_timing = priv->sdr_timing;
+			dev_info(host->dev,"Setting of SDR50 timing is not been!!\n");
+			ret = 0;
+		}
+		ret = of_property_read_u32_array(np,
+			"samsung,dw-mshc-sdr104-timing", timing, 4);	/* SDR104 200mhz */
+		if (!ret)
+			priv->sdr104_timing = SDMMC_CLKSEL_TIMING(timing[0], timing[1], timing[2], timing[3]);
+		else {
+			priv->sdr104_timing = priv->sdr_timing;
+			dev_info(host->dev,"Setting of SDR104 timing is not been!!\n");
+			ret = 0;
+		}
 		break;
 	default:
 		ret = -ENODEV;
@@ -1272,10 +1366,8 @@ static int dw_mci_exynos_execute_tuning(struct dw_mci *host, u32 opcode)
 		else
 			test_sample = dw_mci_tuning_sampling(host);
 
-		dw_mci_set_timeout(host);
-		dev_info(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
-			mci_readl(host, DDR200_ENABLE_SHIFT),
-			mci_readl(host, CLKSEL));
+		dw_mci_set_timeout(host, dw_mci_calc_timeout(host));
+
 		mmc_wait_for_req(mmc, &mrq);
 
 		pass_index = (u8)test_sample;
@@ -1310,27 +1402,29 @@ static int dw_mci_exynos_execute_tuning(struct dw_mci *host, u32 opcode)
 			/*
 			 * Get at middle clock sample values.
 			 */
+
+			if (sample_good == abnormal_result)
+				all_pass_count++;
+
 			if (priv->ctrl_flag & DW_MMC_EXYNOS_BYPASS_FOR_ALL_PASS)
-				bypass = (all_pass_count >= 2) ? true : false;
+				bypass = (all_pass_count >= priv->drv_str_num) ? true : false;
+
+			if (bypass) {
+				dev_info(host->dev, "Bypassed for all pass at %d times\n", priv->drv_str_num);
+				if (en_fine_tuning) {
+					sample_good = abnormal_result & 0x7FFF;
+				} else {
+					sample_good = abnormal_result & 0x7F;
+				}
+				tuned = true;
+			}
+
 			if (en_fine_tuning)
 				best_sample = find_median_of_16bits(host,
 						sample_good, bypass);
 			else
 				best_sample = find_median_of_bits(host,
 						sample_good, bypass);
-
-			if (sample_good == abnormal_result)
-				all_pass_count++;
-			if (bypass) {
-				dev_info(host->dev, "Bypassed for all pass at 3 times\n");
-				if (en_fine_tuning) {
-					best_sample = 4;
-					sample_good = 0x7FFF;
-				} else {
-					best_sample = 4;
-					sample_good = 0x7F;
-				}
-			}
 
 			dev_info(host->dev, "sample_good: 0x %02x best_sample: 0x %02x\n",
 					sample_good, best_sample);
@@ -1391,8 +1485,11 @@ static int dw_mci_exynos_execute_tuning(struct dw_mci *host, u32 opcode)
 		ret = -EIO;
 	}
 
-	kfree(tuning_blk);
+	dev_info(host->dev, "EN_SHIFT 0x %08x CLKSEL 0x %08x\n",
+		mci_readl(host, DDR200_ENABLE_SHIFT),
+		mci_readl(host, CLKSEL));
 
+	kfree(tuning_blk);
 	return ret;
 }
 
@@ -1418,12 +1515,129 @@ static int dw_mci_exynos_turn_on_2_8v(struct dw_mci *host)
 	return ret;
 }
 
+static struct device *sd_detection_cmd_dev;
+
+static ssize_t sd_detection_cmd_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dw_mci *host = dev_get_drvdata(dev);
+	struct dw_mci_exynos_priv_data *priv = host->priv;
+
+	if (host->cur_slot && host->cur_slot->mmc && host->cur_slot->mmc->card) {
+		if (priv->sec_sd_slot_type > 0 && !gpio_is_valid(priv->cd_gpio))
+			goto gpio_error;
+
+		dev_info(host->dev, "SD card inserted.\n");
+		return sprintf(buf, "Insert\n");
+	} else {
+		if (priv->sec_sd_slot_type > 0 && !gpio_is_valid(priv->cd_gpio))
+			goto gpio_error;
+
+		if (gpio_get_value(priv->cd_gpio)
+				&& ((priv->sec_sd_slot_type == SEC_HYBRID_SD_SLOT) 
+				||(priv->sec_sd_slot_type == SEC_HYBRID_SD_SLOT_PD))) {
+			dev_info(host->dev, "SD slot tray Removed.\n");
+			return sprintf(buf, "Notray\n");
+		}
+
+		dev_info(host->dev, "SD card removed.\n");
+		return sprintf(buf, "Remove\n");
+	}
+
+gpio_error:
+	dev_info(host->dev, "%s : External SD detect pin Error\n", __func__);
+	return  sprintf(buf, "Error\n");
+}
+
+static ssize_t sd_detection_cnt_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dw_mci *host = dev_get_drvdata(dev);
+
+	dev_info(host->dev, "%s : CD count is = %u\n", __func__, host->card_detect_cnt);
+	return  sprintf(buf, "%u", host->card_detect_cnt);
+}
+
+static DEVICE_ATTR(status, 0444, sd_detection_cmd_show, NULL);
+static DEVICE_ATTR(cd_cnt, 0444, sd_detection_cnt_show, NULL);
+
+static void dw_mci_exynos_ext_setpower(struct dw_mci *host, u32 flag)
+{
+	int err = 0, ret = 0;
+
+	/* power on case, vmmc -> vqmmc */
+	if (flag & DW_MMC_EXT_VMMC_ON && host->vmmc) {
+		if (!regulator_is_enabled(host->vmmc)) {
+			if (IS_ERR(host->pinctrl))
+				dev_info(host->dev, "could not set pins\n");
+			else
+				host->pins_direction = pinctrl_lookup_state(host->pinctrl, "default");
+
+			if (!IS_ERR(host->pins_direction)) {
+				ret = pinctrl_select_state(host->pinctrl, host->pins_direction);
+				if (ret)
+					dev_info(host->dev, "could not set pins\n");
+			} else
+				dev_info(host->dev, "could not get pinstate\n");
+
+			err = regulator_enable(host->vmmc);
+		}
+	}
+	if (flag & DW_MMC_EXT_VQMMC_ON && host->vqmmc) {
+		if (!regulator_is_enabled(host->vqmmc))
+			err = regulator_enable(host->vqmmc);
+	}
+	if (err)
+		dev_err(host->dev, "failed to enable regulator: %d\n", err);
+
+	/* power off case, vqmmc -> vmmc */
+	if (!(flag & DW_MMC_EXT_VQMMC_ON) && host->vqmmc) {
+		if (regulator_is_enabled(host->vqmmc))
+			regulator_disable(host->vqmmc);
+	}
+	if (!(flag & DW_MMC_EXT_VMMC_ON) && host->vmmc) {
+		if (regulator_is_enabled(host->vmmc)) {
+			regulator_disable(host->vmmc);
+
+			if (IS_ERR(host->pinctrl))
+				dev_info(host->dev, "could not set pins\n");
+			else
+				host->pins_direction = pinctrl_lookup_state(host->pinctrl, "output");
+
+			if (!IS_ERR(host->pins_direction)) {
+				ret = pinctrl_select_state(host->pinctrl, host->pins_direction);
+				if (ret)
+					dev_info(host->dev, "could not set pins\n");
+			} else
+				dev_info(host->dev, "could not get pinstate\n");
+		}
+	}
+
+	dev_info(host->dev, "vmmc %s, vqmmc %s.\n",
+			host->vmmc ? (regulator_is_enabled(host->vmmc) ? "on" : "off") : "none",
+			host->vqmmc ? (regulator_is_enabled(host->vqmmc) ? "on" : "off") : "none");
+}
+
 static int dw_mci_exynos_request_ext_irq(struct dw_mci *host,
 					irq_handler_t func)
 {
 	struct dw_mci_exynos_priv_data *priv = host->priv;
 	int ext_cd_irq = 0;
+	if ((priv->sec_sd_slot_type) >= 0) {
+		if (!sd_detection_cmd_dev) {
+			sd_detection_cmd_dev = sec_device_create(host, "sdcard");
+			if (IS_ERR(sd_detection_cmd_dev))
+				pr_err("Fail to create sysfs dev\n");
 
+			if (device_create_file(sd_detection_cmd_dev,
+						&dev_attr_status) < 0)
+				pr_err("Fail to create status sysfs file\n");
+
+			if (device_create_file(sd_detection_cmd_dev,
+						&dev_attr_cd_cnt) < 0)
+				pr_err("Fail to create cd_cnt sysfs file\n");
+		}
+	}
 	if (gpio_is_valid(priv->cd_gpio) &&
 			!gpio_request(priv->cd_gpio, "DWMCI_EXT_CD")) {
 		ext_cd_irq = gpio_to_irq(priv->cd_gpio);
@@ -1435,9 +1649,18 @@ static int dw_mci_exynos_request_ext_irq(struct dw_mci *host,
 					"tflash_det", host) == 0) {
 			dev_warn(host->dev, "success to request irq for card detect.\n");
 			enable_irq_wake(ext_cd_irq);
+			host->cd_irq = ext_cd_irq;
+
+			//use when the SIM detect pin is "default pull-down"
+			if (priv->sec_sd_slot_type == SEC_HYBRID_SD_SLOT_PD) {
+				host->modemif_nb.notifier_call = dw_mmc_cp_notification_handler;
+				register_modem_event_notifier(&host->modemif_nb);
+			}
+			host->pinctrl = devm_pinctrl_get(host->dev);
+			host->pdata->ext_setpower = dw_mci_exynos_ext_setpower;
+			
 		} else
 			dev_warn(host->dev, "cannot request irq for card detect.\n");
-
 	}
 
 	return 0;
@@ -1450,6 +1673,9 @@ static int dw_mci_exynos_check_cd(struct dw_mci *host)
 
 	if (gpio_is_valid(priv->cd_gpio))
 		ret = gpio_get_value(priv->cd_gpio) ? 0 : 1;
+
+	if (priv->sec_sd_slot_type == SEC_NO_DET_SD_SLOT)
+		ret = 1;
 
 	if (priv->ctrl_windows & DW_MCI_TOGGLE_BLOCK_CD)
 		ret = 0;

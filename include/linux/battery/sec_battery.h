@@ -151,6 +151,9 @@ struct sec_battery_info {
 	/* wpc temperature and pad status check */
 	bool pad_limit;
 
+	/* bat temperature check */
+	bool mix_limit;
+
 	/* temperature check */
 	int temperature;	/* battery temperature */
 	int temper_amb;		/* target temperature */
@@ -319,6 +322,7 @@ enum {
 
 	BATT_CURRENT_UA_NOW,
 	BATT_CURRENT_UA_AVG,
+	BATT_FILTER_CFG,
 
 	BATT_TEMP,
 	BATT_TEMP_ADC,

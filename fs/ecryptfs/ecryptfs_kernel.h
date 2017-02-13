@@ -47,6 +47,9 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 #endif
+#ifdef CONFIG_DLP
+#include "ecryptfs_dlp.h"
+#endif
 
 #ifdef CONFIG_WTL_ENCRYPTION_FILTER
 #define ENC_NAME_FILTER_MAX_INSTANCE 5
@@ -299,6 +302,9 @@ struct ecryptfs_crypt_stat {
 #ifdef CONFIG_SDP
 	int engine_id;
 	dek_t sdp_dek;
+#endif
+#ifdef CONFIG_DLP
+	struct knox_dlp_data expiry;
 #endif
 };
 

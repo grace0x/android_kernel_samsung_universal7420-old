@@ -20,88 +20,44 @@
 #include "ea8061v_xga_param.h"
 #include "../dsim.h"
 #include <video/mipi_display.h>
-
-
+#include "../decon.h"
+#include <linux/gpio.h>
+extern void update_mdnie_coordinate( u16 coordinate0, u16 coordinate1 );
 
 #ifdef CONFIG_PANEL_AID_DIMMING
-static unsigned char EA8061V_SEQ_HBM_OFF[] = {
-	0xB6,
-	0x00 /* write C8h 40th para to B6 4th para*/
-};
+static unsigned char hbm_off_elvss[PANEL_NUM_MAX] = {};/* write C8h 40th para to B6 4th para*/
+static unsigned char hbm_on_elvss[PANEL_NUM_MAX] = {}; /* write B6h 4th default to B6 4th para*/
 
-static unsigned char EA8061V_SEQ_HBM_ON[] = {
-	0xB6,
-	0x00 /* write B6h 4th default to B6 4th para*/
-};
-
-static unsigned char *HBM_TABLE[HBM_STATUS_MAX] = {EA8061V_SEQ_HBM_OFF, EA8061V_SEQ_HBM_ON};
+static unsigned char *HBM_TABLE[HBM_STATUS_MAX] = {hbm_off_elvss, hbm_on_elvss};
 static const unsigned char *ACL_CUTOFF_TABLE[ACL_STATUS_MAX] = {EA8061V_SEQ_ACL_OFF, EA8061V_SEQ_ACL_15};
 static const unsigned char *ACL_OPR_TABLE[ACL_OPR_MAX] = {EA8061V_SEQ_ACL_OFF_OPR, EA8061V_SEQ_ACL_ON_OPR};
 
-static const unsigned int br_tbl [256] = {
-	2, 2, 2, 3,	4, 5, 6, 7,	8,	9,	10,	11,	12,	13,	14,	15,		// 16
-	16,	17,	18,	19,	20,	21,	22,	23,	25,	27,	29,	31,	33,	36,   	// 14
-	39,	41,	41,	44,	44,	47,	47,	50,	50,	53,	53,	56,	56,	56,		// 14
-	60,	60,	60,	64,	64,	64,	68,	68,	68,	72,	72,	72,	72,	77,		// 14
-	77,	77,	82,	82,	82,	82,	87,	87,	87,	87,	93,	93,	93,	93,		// 14
-	98,	98,	98,	98,	98,	105, 105, 105, 105,	111, 111, 111,		// 12
+static const unsigned int br_tbl [EXTEND_BRIGHTNESS + 1] = {
+	5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20,	// 16
+	21, 22, 24, 25, 27, 29, 30, 32, 32, 34, 34, 37, 37, 39, 	// 14
+	41, 41, 41, 44, 44, 47, 47, 50, 50, 53, 53, 56, 56, 56, 	// 14
+	60, 60, 60, 64, 64, 64, 68, 68, 68, 72, 72, 72, 72, 77, 	// 14
+	77, 77, 82, 82, 82, 82, 87, 87, 87, 87, 93, 93, 93, 93, 	// 14
+	98, 98, 98, 98, 98, 105, 105, 105, 105, 111, 111, 111,		// 12
 	111, 111, 111, 119, 119, 119, 119, 119, 126, 126, 126,		// 11
-	126, 126, 126, 134, 134, 134, 134, 134,	134, 134, 143,
+	126, 126, 126, 134, 134, 134, 134, 134, 134, 134, 143,
 	143, 143, 143, 143, 143, 152, 152, 152, 152, 152, 152,
-	152, 152, 162, 162,	162, 162, 162, 162,	162, 172, 172,
-	172, 172, 172, 172,	172, 172, 183, 183, 183, 183, 183,
+	152, 152, 162, 162, 162, 162, 162, 162, 162, 172, 172,
+	172, 172, 172, 172, 172, 172, 183, 183, 183, 183, 183,
 	183, 183, 183, 183, 195, 195, 195, 195, 195, 195, 195,
 	195, 207, 207, 207, 207, 207, 207, 207, 207, 207, 207,
 	220, 220, 220, 220, 220, 220, 220, 220, 220, 220, 234,
-	234, 234, 234, 234,	234, 234, 234, 234,	234, 234, 249,
+	234, 234, 234, 234, 234, 234, 234, 234, 234, 234, 249,
 	249, 249, 249, 249, 249, 249, 249, 249, 249, 249, 249,
 	265, 265, 265, 265, 265, 265, 265, 265, 265, 265, 265,
 	265, 282, 282, 282, 282, 282, 282, 282, 282, 282, 282,
-	282, 282, 282, 300, 300, 300, 300, 300,	300, 300, 300,
+	282, 282, 282, 300, 300, 300, 300, 300, 300, 300, 300,
 	300, 300, 300, 300, 316, 316, 316, 316, 316, 316, 316,
 	316, 316, 316, 316, 316, 333, 333, 333, 333, 333, 333,
-	333, 333, 333, 333, 333, 333, 360							//7
+	333, 333, 333, 333, 333, 333, 360,							//7
+	[UI_MAX_BRIGHTNESS + 1 ... EXTEND_BRIGHTNESS - 1] = 360,
+	[EXTEND_BRIGHTNESS] = 500
 };
-
-
-static const unsigned int hbm_interpolation_br_tbl[256] = {
-	2,		2,		2,		4,		7,		9,		11,		14,		16,		19,		21,		23,		26,		28,		30,		33,
-	35,		37,		40,		42,		45,		47,		49,		52,		54,		56,		59,		61,		63,		66,		68,		71,
-	73,		75,		78,		80,		82,		85,		87,		89,		92,		94,		97,		99,		101,	104,	106,	108,
-	111,	113,	115,	118,	120,	123,	125,	127,	130,	132,	134,	137,	139,	141,	144,	146,
-	149,	151,	153,	156,	158,	160,	163,	165,	167,	170,	172,	175,	177,	179,	182,	184,
-	186,	189,	191,	193,	196,	198,	201,	203,	205,	208,	210,	212,	215,	217,	219,	222,
-	224,	227,	229,	231,	234,	236,	238,	241,	243,	245,	248,	250,	253,	255,	257,	260,
-	262,	264,	267,	269,	271,	274,	276,	279,	281,	283,	286,	288,	290,	293,	295,	297,
-	300,	302,	305,	307,	309,	312,	314,	316,	319,	321,	323,	326,	328,	331,	333,	335,
-	338,	340,	342,	345,	347,	349,	352,	354,	357,	359,	361,	364,	366,	368,	371,	373,
-	375,	378,	380,	383,	385,	387,	390,	392,	394,	397,	399,	401,	404,	406,	409,	411,
-	413,	416,	418,	420,	423,	425,	427,	430,	432,	435,	437,	439,	442,	444,	446,	449,
-	451,	453,	456,	458,	461,	463,	465,	468,	470,	472,	475,	477,	479,	482,	484,	487,
-	489,	491,	494,	496,	498,	501,	503,	505,	508,	510,	513,	515,	517,	520,	522,	524,
-	527,	529,	531,	534,	536,	539,	541,	543,	546,	548,	550,	553,	555,	557,	560,	562,
-	565,	567,	569,	572,	574,	576,	579,	581,	583,	586,	588,	591,	593,	595,	598,	600
-};
-
-static const unsigned gallery_br_tbl[256] = {
-	 2,  2,  2,  3,  5,  6,  8,  10,  11,  13,  15,  16,  18,  20,  21,  23,
-	 25,  26,  28,  29,  32,  33,  34,  36,  38,  39,  41,  43,  44,  46,  48,  50,
-	 51,  53,  55,  56,  57,  60,  61,  62,  64,  66,  68,  69,  71,  73,  74,  76,
-	 78,  79,  81,  83,  84,  86,  88,  89,  91,  92,  94,  96,  97,  99,  101, 102,
-	 104, 106, 107, 109, 111, 112, 114, 116, 117, 119, 120, 123, 124, 125, 127, 129,
-	 130, 132, 134, 135, 137, 139, 141, 142, 144, 146, 147, 148, 151, 152, 153, 155,
-	 157, 159, 160, 162, 164, 165, 167, 169, 170, 172, 174, 175, 177, 179, 180, 182,
-	 183, 185, 187, 188, 190, 192, 193, 195, 197, 198, 200, 202, 203, 205, 207, 208,
-	 210, 211, 214, 215, 216, 218, 220, 221, 223, 225, 226, 228, 230, 232, 233, 235,
-	 237, 238, 239, 242, 243, 244, 246, 248, 250, 251, 253, 255, 256, 258, 260, 261,
-	 263, 265, 266, 268, 270, 271, 273, 274, 276, 278, 279, 281, 283, 284, 286, 288,
-	 289, 291, 293, 294, 296, 298, 299, 301, 302, 305, 306, 307, 309, 311, 312, 314,
-	 316, 317, 319, 321, 323, 324, 326, 328, 329, 330, 333, 334, 335, 337, 339, 341,
-	 342, 344, 346, 347, 349, 351, 352, 354, 356, 357, 359, 361, 362, 364, 365, 367,
-	 369, 370, 372, 374, 375, 377, 379, 380, 382, 384, 385, 387, 389, 390, 392, 393,
-	 396, 397, 398, 400, 402, 403, 405, 407, 408, 410, 412, 414, 415, 417, 419, 430,
-};
-
 
 static const short center_gamma[NUM_VREF][CI_MAX] = {
 	{0x000, 0x000, 0x000},
@@ -115,7 +71,6 @@ static const short center_gamma[NUM_VREF][CI_MAX] = {
 	{0x080, 0x080, 0x080},
 	{0x100, 0x100, 0x100},
 };
-
 
 static signed char aid9562[5] = {0xB2, 0x00, 0x06, 0x04, 0xDD};	/* 0 samsung_brightness_aor 95.62% */
 static signed char aid9470[5] = {0xB2, 0x00, 0x06, 0x04, 0xD1};	/* 1 samsung_brightness_aor 94.7% */
@@ -160,8 +115,6 @@ static signed char aid1782[5] = {0xB2, 0x00, 0x06, 0x00, 0xE8};	/* 39 samsung_br
 static signed char aid1206[5] = {0xB2, 0x00, 0x06, 0x00, 0x9D};	/* 40 samsung_brightness_aor 12.06% */
 static signed char aid6450[5] = {0xB2, 0x00, 0x06, 0x00, 0x54};	/* 41 samsung_brightness_aor 6.45% */
 static signed char aid0840[5] = {0xB2, 0x00, 0x06, 0x00, 0x0B};	/* 42 samsung_brightness_aor 0.84% */
-
-
 
 // aid sheet opmanual
 struct SmtDimInfo dimming_info_RG[MAX_BR_INFO] = {
@@ -220,94 +173,26 @@ struct SmtDimInfo dimming_info_RG[MAX_BR_INFO] = {
 	{.br = 207, .refBr = 255, .cGma = gma2p15, .rTbl = EA_rtbl_207nit, .cTbl = EA_ctbl_207nit, .aid = aid1782, .elvCaps = elv_caps_207, .elv = elv_207, .way = W1},
 	{.br = 220, .refBr = 255, .cGma = gma2p15, .rTbl = EA_rtbl_220nit, .cTbl = EA_ctbl_220nit, .aid = aid1206, .elvCaps = elv_caps_220, .elv = elv_220, .way = W1},
 	{.br = 234, .refBr = 255, .cGma = gma2p15, .rTbl = EA_rtbl_234nit, .cTbl = EA_ctbl_234nit, .aid = aid6450, .elvCaps = elv_caps_234, .elv = elv_234, .way = W1},
-	{.br = 249, .refBr = 255, .cGma = gma2p15, .rTbl = EA_rtbl_249nit, .cTbl = EA_ctbl_249nit, .aid = aid0840, .elvCaps = elv_caps_249, .elv = elv_249, .way = W1},		// 249 ~ 360 acl off
+	{.br = 249, .refBr = 255, .cGma = gma2p15, .rTbl = EA_rtbl_249nit, .cTbl = EA_ctbl_249nit, .aid = aid0840, .elvCaps = elv_caps_249, .elv = elv_249, .way = W1},
 	{.br = 265, .refBr = 272, .cGma = gma2p15, .rTbl = EA_rtbl_265nit, .cTbl = EA_ctbl_265nit, .aid = aid0840, .elvCaps = elv_caps_265, .elv = elv_265, .way = W1},
 	{.br = 282, .refBr = 289, .cGma = gma2p15, .rTbl = EA_rtbl_282nit, .cTbl = EA_ctbl_282nit, .aid = aid0840, .elvCaps = elv_caps_282, .elv = elv_282, .way = W1},
 	{.br = 300, .refBr = 306, .cGma = gma2p15, .rTbl = EA_rtbl_300nit, .cTbl = EA_ctbl_300nit, .aid = aid0840, .elvCaps = elv_caps_300, .elv = elv_300, .way = W1},
 	{.br = 316, .refBr = 320, .cGma = gma2p15, .rTbl = EA_rtbl_316nit, .cTbl = EA_ctbl_316nit, .aid = aid0840, .elvCaps = elv_caps_316, .elv = elv_316, .way = W1},
 	{.br = 333, .refBr = 340, .cGma = gma2p15, .rTbl = EA_rtbl_333nit, .cTbl = EA_ctbl_333nit, .aid = aid0840, .elvCaps = elv_caps_333, .elv = elv_333, .way = W1},
-	{.br = 360, .refBr = 360, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W2},
-#if 0
-/*hbm interpolation , lihh TBD*/
-	{.br = 382, .refBr = 382, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 407, .refBr = 407, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 433, .refBr = 433, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 461, .refBr = 461, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 491, .refBr = 491, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 517, .refBr = 517, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-	{.br = 545, .refBr = 545, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W3},  // hbm is acl on
-/* hbm */
-	{.br = 600, .refBr = 600, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W4}, // hbm is acl on
-#endif
+	{.br = 360, .refBr = 360, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W1},
+	{.br = 500, .refBr = 500, .cGma = gma2p20, .rTbl = EA_rtbl_360nit, .cTbl = EA_ctbl_360nit, .aid = aid0840, .elvCaps = elv_caps_360, .elv = elv_360, .way = W4}, //for HBM
 };
 
-
-
-static int set_gamma_to_center(struct SmtDimInfo *brInfo)
+extern struct decon_device *decon_int_drvdata;
+static int panel_index_init = 0;
+int get_panel_index_init(void)
 {
-	int i, j;
-	int ret = 0;
-	unsigned int index = 0;
-	unsigned char *result = brInfo->gamma;
-
-	result[index++] = OLED_CMD_GAMMA;
-
-	for (i = V255; i >= V0; i--) {
-		for (j = 0; j < CI_MAX; j++) {
-			if (i == V255) {
-				result[index++] = (unsigned char)((center_gamma[i][j] >> 8) & 0x01);
-				result[index++] = (unsigned char)center_gamma[i][j] & 0xff;
-			} else {
-				result[index++] = (unsigned char)center_gamma[i][j] & 0xff;
-			}
-		}
-	}
-	result[index++] = 0x00;
-	result[index++] = 0x00;
-
-	return ret;
+	return panel_index_init;
 }
 
-static int gammaToVolt255(int gamma)
+void set_panel_index_init(int val)
 {
-	int ret;
-
-	if (gamma > vreg_element_max[V255]) {
-		dsim_err("%s : gamma overflow : %d\n", __FUNCTION__, gamma);
-		gamma = vreg_element_max[V255];
-	}
-	if (gamma < 0) {
-		dsim_err("%s : gamma undeflow : %d\n", __FUNCTION__, gamma);
-		gamma = 0;
-	}
-
-	ret = (int)v255_trans_volt[gamma];
-
-	return ret;
-}
-
-static int voltToGamma(int hbm_volt_table[][3], int* vt, int tp, int color)
-{
-	int ret;
-	int t1, t2;
-	unsigned long temp;
-
-	if(tp == V3)
-	{
-		t1 = DOUBLE_MULTIPLE_VREGOUT - hbm_volt_table[V3][color];
-		t2 = DOUBLE_MULTIPLE_VREGOUT - hbm_volt_table[V11][color];
-	}
-	else
-	{
-		t1 = vt[color] - hbm_volt_table[tp][color];
-		t2 = vt[color] - hbm_volt_table[tp + 1][color];
-	}
-
-	temp = ((unsigned long)t1 * (unsigned long)fix_const[tp].de) / (unsigned long)t2;
-	ret = temp - fix_const[tp].nu;
-
-	return ret;
-
+	panel_index_init = val;
 }
 
 static int set_gamma_to_hbm(struct SmtDimInfo *brInfo, struct dim_data *dimData, u8 *hbm)
@@ -315,50 +200,13 @@ static int set_gamma_to_hbm(struct SmtDimInfo *brInfo, struct dim_data *dimData,
 	int ret = 0;
 	unsigned int index = 0;
 	unsigned char *result = brInfo->gamma;
-	int i, j, idx;
-	int temp = 0;
-	int voltTableHbm[NUM_VREF][CI_MAX];
+	int i;
 
 	memset(result, 0, OLED_CMD_GAMMA_CNT);
 
 	result[index++] = OLED_CMD_GAMMA;
 
 	memcpy(result+1, hbm, EA8061V_HBMGAMMA_LEN);
-
-
-	memcpy(voltTableHbm[V0], dimData->volt[0], sizeof(voltTableHbm[V0]));
-	memcpy(voltTableHbm[V3], dimData->volt[1], sizeof(voltTableHbm[V3]));
-	memcpy(voltTableHbm[V11], dimData->volt[10], sizeof(voltTableHbm[V11]));
-	memcpy(voltTableHbm[V23], dimData->volt[26], sizeof(voltTableHbm[V23]));
-	memcpy(voltTableHbm[V35], dimData->volt[40], sizeof(voltTableHbm[V35]));
-	memcpy(voltTableHbm[V51], dimData->volt[56], sizeof(voltTableHbm[V51]));
-	memcpy(voltTableHbm[V87], dimData->volt[100], sizeof(voltTableHbm[V87]));
-	memcpy(voltTableHbm[V151], dimData->volt[173], sizeof(voltTableHbm[V151]));
-	memcpy(voltTableHbm[V203], dimData->volt[233], sizeof(voltTableHbm[V203]));
-
-
-	idx = 0;
-	for(i = CI_RED; i < CI_MAX; i++, idx += 2) {
-		temp = (hbm[idx] << 8) | (hbm[idx + 1]);
-		voltTableHbm[V255][i] = gammaToVolt255(temp + dimData->mtp[V255][i]);
-	}
-
-	idx = 1;
-	for (i = V255; i >= V0; i--) {
-		for (j = 0; j < CI_MAX; j++) {
-			if (i == V255) {
-				idx += 2;
-			} else if(i == V0) {
-				idx++;
-			} else {
-				temp = voltToGamma(voltTableHbm, dimData->volt_vt, i, j) - dimData->mtp[i][j];
-				if(temp <= 0)
-					temp = 0;
-				result[idx] = temp;
-				idx ++;
-			}
-		}
-	}
 
 	dsim_info("============ TUNE HBM GAMMA ========== : \n");
 	for (i= 0; i < EA8061V_HBMGAMMA_LEN; i ++) {
@@ -367,90 +215,7 @@ static int set_gamma_to_hbm(struct SmtDimInfo *brInfo, struct dim_data *dimData,
 	return ret;
 }
 
-/* gamma interpolaion table */
-const unsigned int tbl_hbm_inter[7] = {
-	94, 201, 311, 431, 559, 670, 789
-};
-
-static int interpolation_gamma_to_hbm(struct SmtDimInfo *dimInfo, int br_idx)
-{
-	int i, j;
-	int ret = 0;
-	int idx = 0;
-	int tmp = 0;
-	int hbmcnt, refcnt, gap = 0;
-	int ref_idx = 0;
-	int hbm_idx = 0;
-	int rst = 0;
-	int hbm_tmp, ref_tmp;
-	unsigned char *result = dimInfo[br_idx].gamma;
-
-	for (i = 0; i < MAX_BR_INFO; i++) {
-		if (dimInfo[i].br == EA8061V_MAX_BRIGHTNESS)
-			ref_idx = i;
-
-		if (dimInfo[i].br == EA8061V_HBM_BRIGHTNESS)
-			hbm_idx = i;
-	}
-
-	if ((ref_idx == 0) || (hbm_idx == 0)) {
-		dsim_info("%s failed to get index ref index : %d, hbm index : %d\n",
-					__func__, ref_idx, hbm_idx);
-		ret = -EINVAL;
-		goto exit;
-	}
-
-	result[idx++] = OLED_CMD_GAMMA;
-	tmp = (br_idx - ref_idx) - 1;
-
-	hbmcnt = 1;
-	refcnt = 1;
-
-	for (i = V255; i >= V0; i--) {
-		for (j = 0; j < CI_MAX; j++) {
-			if (i == V255) {
-				hbm_tmp = (dimInfo[hbm_idx].gamma[hbmcnt] << 8) | (dimInfo[hbm_idx].gamma[hbmcnt+1]);
-				ref_tmp = (dimInfo[ref_idx].gamma[refcnt] << 8) | (dimInfo[ref_idx].gamma[refcnt+1]);
-
-				if (hbm_tmp > ref_tmp) {
-					gap = hbm_tmp - ref_tmp;
-					rst = (gap * tbl_hbm_inter[tmp]) >> 10;
-					rst += ref_tmp;
-				}
-				else {
-					gap = ref_tmp - hbm_tmp;
-					rst = (gap * tbl_hbm_inter[tmp]) >> 10;
-					rst = ref_tmp - rst;
-				}
-				result[idx++] = (unsigned char)((rst >> 8) & 0x01);
-				result[idx++] = (unsigned char)rst & 0xff;
-				hbmcnt += 2;
-				refcnt += 2;
-			} else {
-				hbm_tmp = dimInfo[hbm_idx].gamma[hbmcnt++];
-				ref_tmp = dimInfo[ref_idx].gamma[refcnt++];
-
-				if (hbm_tmp > ref_tmp) {
-					gap = hbm_tmp - ref_tmp;
-					rst = (gap * tbl_hbm_inter[tmp]) >> 10;
-					rst += ref_tmp;
-				}
-				else {
-					gap = ref_tmp - hbm_tmp;
-					rst = (gap * tbl_hbm_inter[tmp]) >> 10;
-					rst = ref_tmp - rst;
-				}
-				result[idx++] = (unsigned char)rst & 0xff;
-			}
-		}
-	}
-
-	dsim_info("tmp index : %d\n", tmp);
-
-exit:
-	return ret;
-}
-static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm)
+static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm, int pi)
 {
 	int i, j;
 	int pos = 0;
@@ -477,16 +242,12 @@ static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm)
 	dsim_info("%s init dimming info for daisy rev.G panel\n", __func__);
 	diminfo = (void *)dimming_info_RG;
 
-	panel->dim_data= (void *)dimming;
-	panel->dim_info = (void *)diminfo;
+	panel->dim_data[pi]= (void *)dimming;
+	panel->dim_info[pi] = (void *)diminfo;
 	panel->br_tbl = (unsigned int *)br_tbl;
-	panel->hbm_inter_br_tbl = (unsigned int *)hbm_interpolation_br_tbl;
-	panel->gallery_br_tbl = (unsigned int*)gallery_br_tbl;
 	panel->hbm_tbl = (unsigned char **)HBM_TABLE;
 	panel->acl_cutoff_tbl = (unsigned char **)ACL_CUTOFF_TABLE;
 	panel->acl_opr_tbl = (unsigned char **)ACL_OPR_TABLE;
-	panel->hbm_index = MAX_BR_INFO - 1;
-	panel->hbm_elvss_comp = EA8061V_HBM_ELVSS_COMP;
 
 	for (j = 0; j < CI_MAX; j++) {
 		temp = ((mtp[pos] & 0x01) ? -1 : 1) * mtp[pos+1];
@@ -543,25 +304,6 @@ static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm)
 
 	for (i = 0; i < MAX_BR_INFO; i++) {
 		method = diminfo[i].way;
-
-		if (method == DIMMING_METHOD_FILL_CENTER) {
-			ret = set_gamma_to_center(&diminfo[i]);
-			if (ret) {
-				dsim_err("%s : failed to get center gamma\n", __func__);
-				goto error;
-			}
-		}
-		else if (method == DIMMING_METHOD_FILL_HBM) {
-			ret = set_gamma_to_hbm(&diminfo[i], dimming, hbm);
-			if (ret) {
-				dsim_err("%s : failed to get hbm gamma\n", __func__);
-				goto error;
-			}
-		}
-	}
-
-	for (i = 0; i < MAX_BR_INFO; i++) {
-		method = diminfo[i].way;
 		if (method == DIMMING_METHOD_AID) {
 			ret = cal_gamma_from_index(dimming, &diminfo[i]);
 			if (ret) {
@@ -569,10 +311,10 @@ static int init_dimming(struct dsim_device *dsim, u8 *mtp, u8 *hbm)
 				goto error;
 			}
 		}
-		if (method == DIMMING_METHOD_INTERPOLATION) {
-			ret = interpolation_gamma_to_hbm(diminfo, i);
+		else if (method == DIMMING_METHOD_FILL_HBM) {
+			ret = set_gamma_to_hbm(&diminfo[i], dimming, hbm);
 			if (ret) {
-				dsim_err("%s : failed to calculate gamma : index : %d\n", __func__, i);
+				dsim_err("%s : failed to get hbm gamma\n", __func__);
 				goto error;
 			}
 		}
@@ -594,10 +336,7 @@ error:
 }
 #endif
 
-
-
-
-static int ea8061v_read_init_info(struct dsim_device *dsim, unsigned char *mtp, unsigned char* hbm)
+static int ea8061v_read_init_info(struct dsim_device *dsim, unsigned char *mtp, unsigned char* hbm, int pi)
 {
 	int i = 0;
 	int ret = 0;
@@ -605,24 +344,25 @@ static int ea8061v_read_init_info(struct dsim_device *dsim, unsigned char *mtp, 
 	unsigned char buf[EA8061V_MTP_DATE_SIZE] = {0, };
 	unsigned char bufForCoordi[EA8061V_COORDINATE_LEN] = {0,};
 	unsigned char hbm_gamma_etc[12] = {0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,0,0,0};
+
 	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0, ARRAY_SIZE(EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0));
 	if (ret < 0) {
 		dsim_err("%s : fail to write CMD : SEQ_LEVEL2_KEY_UNLOCK_F0\n", __func__);
-		panel->lcdConnected = PANEL_DISCONNEDTED;
+		panel->lcdConnected[pi] = PANEL_DISCONNEDTED;
 		goto read_fail;
 	}
 
 	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_UNLOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_UNLOCK_F1));
 	if (ret < 0) {
 		dsim_err("%s : fail to write CMD : SEQ_MTP_KEY_UNLOCK_F1\n", __func__);
-		panel->lcdConnected = PANEL_DISCONNEDTED;
+		panel->lcdConnected[pi] = PANEL_DISCONNEDTED;
 		goto read_fail;
 	}
 
 	ret = dsim_read_hl_data(dsim, EA8061V_ID_REG, EA8061V_ID_LEN, dsim->priv.id);
 	if (ret != EA8061V_ID_LEN) {
 		dsim_err("%s : can't find connected panel. check panel connection\n", __func__);
-		panel->lcdConnected = PANEL_DISCONNEDTED;
+		panel->lcdConnected[pi] = PANEL_DISCONNEDTED;
 		goto read_fail;
 	}
 
@@ -649,177 +389,69 @@ static int ea8061v_read_init_info(struct dsim_device *dsim, unsigned char *mtp, 
 		dsim_err("fail to read coordinate on command.\n");
 		goto read_fail;
 	}
-	dsim->priv.coordinate[0] = bufForCoordi[0] << 8 | bufForCoordi[1];	/* X */
-	dsim->priv.coordinate[1] = bufForCoordi[2] << 8 | bufForCoordi[3];	/* Y */
+	dsim->priv.coordinate[pi][0] = bufForCoordi[0] << 8 | bufForCoordi[1];	/* X */
+	dsim->priv.coordinate[pi][1] = bufForCoordi[2] << 8 | bufForCoordi[3];	/* Y */
 	dsim_info("READ coordi : ");
 	for(i = 0; i < 2; i++)
-		dsim_info("%d, ", dsim->priv.coordinate[i]);
+		dsim_info("%d, ", dsim->priv.coordinate[pi][i]);
 	dsim_info("\n");
 
-
-	// tset
-	ret = dsim_read_hl_data(dsim, TSET_REG, TSET_LEN - 1, dsim->priv.tset);
-	if (ret < TSET_LEN - 1) {
-		dsim_err("fail to read tset on command.\n");
-		goto read_fail;
-	}
-	dsim_info("READ tset : ");
-	for(i = 0; i < TSET_LEN - 1; i++)
-		dsim_info("%x, ", dsim->priv.tset[i]);
-	dsim_info("\n");
-
+	dsim->priv.tset[pi][0] = EA8061V_SEQ_TSET[1];
 
 	// elvss
-	ret = dsim_read_hl_data(dsim, ELVSS_REG, ELVSS_LEN - 1, dsim->priv.elvss_set);
+	ret = dsim_read_hl_data(dsim, ELVSS_REG, ELVSS_LEN - 1, dsim->priv.elvss_set[pi]);
 	if (ret < ELVSS_LEN - 1) {
 		dsim_err("fail to read elvss on command.\n");
 		goto read_fail;
 	}
 	dsim_info("READ elvss : ");
 	for(i = 0; i < ELVSS_LEN - 1; i++)
-		dsim_info("%x \n", dsim->priv.elvss_set[i]);
+		dsim_info("%x \n", dsim->priv.elvss_set[pi][i]);
 
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_LEVEL2_KEY_LOCK_F0, ARRAY_SIZE(EA8061V_SEQ_LEVEL2_KEY_LOCK_F0));
+	cmd_err_check(EA8061V_SEQ_LEVEL2_KEY_LOCK_F0, ret, read_fail);
 
-	// record HBM ON/OFF para.
-	EA8061V_SEQ_HBM_ON[1] = mtp[39];
-	EA8061V_SEQ_HBM_OFF[1] = dsim->priv.elvss_set[3];
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_LOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_LOCK_F1));
+	cmd_err_check(EA8061V_SEQ_MTP_KEY_LOCK_F1, ret, read_fail);
 
+	// record HBM ON/OFF elvss setting.
+	hbm_on_elvss[pi] = mtp[39];
+	hbm_off_elvss[pi] = dsim->priv.elvss_set[pi][3];
+	dsim_info("elvss: HBM on: %d, off: %d\n",hbm_on_elvss[pi],hbm_off_elvss[pi]);
 
-	// read HBM gamma
-	memcpy(hbm, &mtp[33], 6); //CAh 34th to 39 th para.
-	memcpy(&hbm[6], &mtp[42], 15); //CAh 34th to 39 th para.
+	// get HBM gamma
+	memcpy(hbm, &mtp[33], 6); //C8h 34th to 39th para.
+	memcpy(&hbm[6], &mtp[42], 15); //C8h 43th to 57th para.
 	memcpy(&hbm[21], hbm_gamma_etc, 12);
 
 	dsim_info("HBM Gamma : ");
-	for(i = 1; i < EA8061V_HBMGAMMA_LEN; i++)
+	for(i = 0; i < EA8061V_HBMGAMMA_LEN; i++)
 		dsim_info("hbm gamma[%d] : %x\n", i, hbm[i]);
 
 	return 0;
 
 read_fail:
+	panel->lcdConnected[pi] = PANEL_DISCONNEDTED;
 	return -ENODEV;
 }
-static int ea8061v_xga_dump(struct dsim_device *dsim)
-{
-	int ret = 0;
-	int i;
-	unsigned char id[EA8061V_ID_LEN];
-	unsigned char rddpm[4];
-	unsigned char rddsm[4];
-	unsigned char err_buf[4];
 
-	ret = dsim_write_hl_data(dsim, SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(SEQ_TEST_KEY_ON_F0));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_ON_F0\n", __func__);
-	}
-
-	ret = dsim_read_hl_data(dsim, 0xEA, 3, err_buf);
-	if (ret != 3) {
-		dsim_err("%s : can't read Panel's EA Reg\n",__func__);
-		goto dump_exit;
-	}
-
-	dsim_info("=== Panel's 0xEA Reg Value ===\n");
-	dsim_info("* 0xEA : buf[0] = %x\n", err_buf[0]);
-	dsim_info("* 0xEA : buf[1] = %x\n", err_buf[1]);
-
-	ret = dsim_read_hl_data(dsim, EA8061V_RDDPM_ADDR, 3, rddpm);
-	if (ret != 3) {
-		dsim_err("%s : can't read RDDPM Reg\n",__func__);
-		goto dump_exit;
-	}
-
-	dsim_info("=== Panel's RDDPM Reg Value : %x ===\n", rddpm[0]);
-
-	if (rddpm[0] & 0x80)
-		dsim_info("* Booster Voltage Status : ON\n");
-	else
-		dsim_info("* Booster Voltage Status : OFF\n");
-
-	if (rddpm[0] & 0x40)
-		dsim_info("* Idle Mode : On\n");
-	else
-		dsim_info("* Idle Mode : OFF\n");
-
-	if (rddpm[0] & 0x20)
-		dsim_info("* Partial Mode : On\n");
-	else
-		dsim_info("* Partial Mode : OFF\n");
-
-	if (rddpm[0] & 0x10)
-		dsim_info("* Sleep OUT and Working Ok\n");
-	else
-		dsim_info("* Sleep IN\n");
-
-	if (rddpm[0] & 0x08)
-		dsim_info("* Normal Mode On and Working Ok\n");
-	else
-		dsim_info("* Sleep IN\n");
-
-	if (rddpm[0] & 0x04)
-		dsim_info("* Display On and Working Ok\n");
-	else
-		dsim_info("* Display Off\n");
-
-	ret = dsim_read_hl_data(dsim, EA8061V_RDDSM_ADDR, 3, rddsm);
-	if (ret != 3) {
-		dsim_err("%s : can't read RDDSM Reg\n",__func__);
-		goto dump_exit;
-	}
-
-	dsim_info("=== Panel's RDDSM Reg Value : %x ===\n", rddsm[0]);
-
-	if (rddsm[0] & 0x80)
-		dsim_info("* TE On\n");
-	else
-		dsim_info("* TE OFF\n");
-
-	if (rddsm[0] & 0x02)
-		dsim_info("* S_DSI_ERR : Found\n");
-
-	if (rddsm[0] & 0x01)
-		dsim_info("* DSI_ERR : Found\n");
-
-	// id
-	ret = dsim_read_hl_data(dsim, EA8061V_ID_REG, EA8061V_ID_LEN, id);
-	if (ret != EA8061V_ID_LEN) {
-		dsim_err("%s : can't read panel id\n",__func__);
-		goto dump_exit;
-	}
-
-	dsim_info("READ ID : ");
-	for(i = 0; i < EA8061V_ID_LEN; i++)
-		dsim_info("%02x, ", id[i]);
-	dsim_info("\n");
-
-	ret = dsim_write_hl_data(dsim, SEQ_TEST_KEY_OFF_F0, ARRAY_SIZE(SEQ_TEST_KEY_OFF_F0));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : SEQ_TEST_KEY_OFF_F0\n", __func__);
-	}
-dump_exit:
-	dsim_info(" - %s\n", __func__);
-	return ret;
-
-}
-static int ea8061v_xga_probe(struct dsim_device *dsim)
+static int ea8061v_xga_probe_core(struct dsim_device *dsim, int pi)
 {
 	int ret = 0;
 	struct panel_private *panel = &dsim->priv;
 	unsigned char mtp[EA8061V_MTP_SIZE] = {0, };
 	unsigned char hbm[EA8061V_HBMGAMMA_LEN] = {0, };
-	panel->dim_data = (void *)NULL;
-	panel->lcdConnected = PANEL_CONNECTED;
-	
-	dsim_info(" +  : %s\n", __func__);
 
-	ret = ea8061v_read_init_info(dsim, mtp, hbm);
-	if (panel->lcdConnected == PANEL_DISCONNEDTED) {
+	dsim_info("MDD : %s\n", __func__);
+
+	ret = ea8061v_read_init_info(dsim, mtp, hbm, pi);
+	if (panel->lcdConnected[pi] == PANEL_DISCONNEDTED) {
 		dsim_err("dsim : %s lcd was not connected\n", __func__);
 		goto probe_exit;
 	}
 
 #ifdef CONFIG_PANEL_AID_DIMMING
-	ret = init_dimming(dsim, mtp, hbm);
+	ret = init_dimming(dsim, mtp, hbm, pi);
 	if (ret) {
 		dsim_err("%s : failed to generate gamma tablen\n", __func__);
 	}
@@ -833,13 +465,36 @@ probe_exit:
 
 }
 
+static int ea8061v_xga_probe(struct dsim_device *dsim)
+{
+	int ret = 0, pi;
+	struct panel_private *panel = &dsim->priv;
+
+	panel->lcdConnected[0] = PANEL_CONNECTED;
+	panel->lcdConnected[1] = PANEL_CONNECTED;
+	panel->dim_data[0] = (void *)NULL;
+	panel->dim_data[1] = (void *)NULL;
+
+	pi = gpio_get_value(dsim->res.lcd_sel);
+	set_panel_index_init(pi);
+	dsim_info("MDD : %s, lcd_sel gpio %d\n", __func__, pi);
+
+	ret = ea8061v_xga_probe_core(dsim, pi);
+
+	return ret;
+}
+
 
 static int ea8061v_xga_displayon(struct dsim_device *dsim)
 {
 	int ret = 0;
 
 	dsim_info("MDD : %s was called\n", __func__);
-	
+	/* Sleep Out(11h) */
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_SLEEP_OUT, ARRAY_SIZE(EA8061V_SEQ_SLEEP_OUT));
+	cmd_err_check(EA8061V_SEQ_SLEEP_OUT, ret, displayon_err);
+	msleep(120);
+
 	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_DISPLAY_ON, ARRAY_SIZE(EA8061V_SEQ_DISPLAY_ON));
 	if (ret < 0) {
 		dsim_err("%s : fail to write CMD : DISPLAY_ON\n", __func__);
@@ -878,36 +533,61 @@ exit_err:
 static int ea8061v_xga_init(struct dsim_device *dsim)
 {
 	int ret = 0;
+	struct panel_private *panel = &dsim->priv;
+	int pi = gpio_get_value(dsim->res.lcd_sel);
+
+	dsim_info("MDD : %s, lcd_sel gpio %d\n", __func__, pi);
+	set_panel_index_init(pi);
+	// probe the second panel
+	if (!panel->dim_data[pi] && (panel->lcdConnected[pi] == PANEL_CONNECTED)) {
+		if (ea8061v_xga_probe_core(dsim, pi))
+			goto init_exit;
+		update_mdnie_coordinate(dsim->priv.coordinate[pi][0], dsim->priv.coordinate[pi][1]);
+	}
 
 	dsim_info("MDD : %s was called\n", __func__);
-	
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0, ARRAY_SIZE(EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0));
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_UNLOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_UNLOCK_F1));
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0, ARRAY_SIZE(EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0));
+	cmd_err_check(EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_UNLOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_UNLOCK_F1));
+	cmd_err_check(EA8061V_SEQ_MTP_KEY_UNLOCK_F1, ret, init_exit);
 
 	/*  Common Setting */
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_COMMON_B8, ARRAY_SIZE(EA8061V_SEQ_COMMON_B8));
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_COMMON_BA, ARRAY_SIZE(EA8061V_SEQ_COMMON_BA));
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_COMMON_B8, ARRAY_SIZE(EA8061V_SEQ_COMMON_B8));
+	cmd_err_check(EA8061V_SEQ_COMMON_B8, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_COMMON_BA, ARRAY_SIZE(EA8061V_SEQ_COMMON_BA));
+	cmd_err_check(EA8061V_SEQ_COMMON_BA, ret, init_exit);
 
 	/* H sync.	It use last packet*/
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_HSYNC_B9, ARRAY_SIZE(EA8061V_SEQ_HSYNC_B9));
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_HSYNC_B9, ARRAY_SIZE(EA8061V_SEQ_HSYNC_B9));
+	cmd_err_check(EA8061V_SEQ_HSYNC_B9, ret, init_exit);
 
 	/* Brightness Control. It use last packet*/
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_GAMMA_CONDITION_CA, ARRAY_SIZE(EA8061V_SEQ_GAMMA_CONDITION_CA));
-	ret += dsim_write_hl_data(dsim, EA8061V_BL_CTRL_B2, ARRAY_SIZE(EA8061V_BL_CTRL_B2));
-	ret += dsim_write_hl_data(dsim, EA8061V_BL_CTRL_B6, ARRAY_SIZE(EA8061V_BL_CTRL_B6));
-	//ret += dsim_write_hl_data(dsim, EA8061V_BL_CTRL_B5, ARRAY_SIZE(EA8061V_BL_CTRL_B5));
-	//ret += dsim_write_hl_data(dsim, EA8061V_SEQ_ACL_OFF_55, ARRAY_SIZE(EA8061V_SEQ_ACL_OFF_55));
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_GAMMA_UPDATE_F7, ARRAY_SIZE(EA8061V_SEQ_GAMMA_UPDATE_F7));
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_GAMMA_CONDITION_CA, ARRAY_SIZE(EA8061V_SEQ_GAMMA_CONDITION_CA));
+	cmd_err_check(EA8061V_SEQ_GAMMA_CONDITION_CA, ret, init_exit);
 
-	/* Sleep Out(11h) */
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_SLEEP_OUT, ARRAY_SIZE(EA8061V_SEQ_SLEEP_OUT));
-	msleep(120);
-	
-	ret += dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_LOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_LOCK_F1));
-	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : init sequence\n", __func__);
-		goto init_exit;
-	}
+	ret = dsim_write_hl_data(dsim, EA8061V_BL_CTRL_B2, ARRAY_SIZE(EA8061V_BL_CTRL_B2));
+	cmd_err_check(EA8061V_BL_CTRL_B2, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_BL_CTRL_B6, ARRAY_SIZE(EA8061V_BL_CTRL_B6));
+	cmd_err_check(EA8061V_BL_CTRL_B6, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_ACL_OFF_OPR, ARRAY_SIZE(EA8061V_SEQ_ACL_OFF_OPR));
+	cmd_err_check(EA8061V_SEQ_ACL_OFF_OPR, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_ACL_OFF, ARRAY_SIZE(EA8061V_SEQ_ACL_OFF));
+	cmd_err_check(EA8061V_SEQ_ACL_OFF, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_GAMMA_UPDATE_F7, ARRAY_SIZE(EA8061V_SEQ_GAMMA_UPDATE_F7));
+	cmd_err_check(EA8061V_SEQ_GAMMA_UPDATE_F7, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_MTP_KEY_LOCK_F1, ARRAY_SIZE(EA8061V_SEQ_MTP_KEY_LOCK_F1));
+	cmd_err_check(EA8061V_SEQ_MTP_KEY_LOCK_F1, ret, init_exit);
+
+	ret = dsim_write_hl_data(dsim, EA8061V_SEQ_LEVEL2_KEY_LOCK_F0, ARRAY_SIZE(EA8061V_SEQ_LEVEL2_KEY_LOCK_F0));
+	cmd_err_check(EA8061V_SEQ_LEVEL2_KEY_LOCK_F0, ret, init_exit);
 
 init_exit:
 	return ret;
@@ -919,7 +599,6 @@ struct dsim_panel_ops ea8061v_panel_ops = {
 	.displayon	= ea8061v_xga_displayon,
 	.exit		= ea8061v_xga_exit,
 	.init		= ea8061v_xga_init,
-	.dump 		= ea8061v_xga_dump,
 };
 
 

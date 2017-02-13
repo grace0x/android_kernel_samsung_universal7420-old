@@ -3936,7 +3936,8 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 				/* Read the Mb data to see if the Dongle has actually sent D3 ACK */
 				dhd_bus_cmn_readshared(bus, &d2h_mb_data, D2H_MB_DATA, 0);
 
-				if (d2h_mb_data & D2H_DEV_D3_ACK) {
+				if (!D2H_DEV_MB_INVALIDATED(d2h_mb_data) &&
+						(d2h_mb_data & D2H_DEV_D3_ACK)) {
 					DHD_ERROR(("*** D3 WAR for missing interrupt ***\r\n"));
 					/* Clear the MB Data */
 					dhd_bus_cmn_writeshared(bus, &zero, sizeof(uint32),

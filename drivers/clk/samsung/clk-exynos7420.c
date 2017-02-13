@@ -53,7 +53,7 @@ enum exynos7420_clks {
 	/* number for mmc starts from 180, dma from 183 */
 	/* number for rtc starts from 185 */
 	usermux_aclk_fsys1_200 = 180, sclk_mmc0, dout_mmc0, pdma0, pdma1,
-	rtc,
+	rtc, sclk_mmc1, dout_mmc1,
 	sclk_mmc2 = 190, dout_mmc2, usermux_aclk_fsys0_200,
 	/* number for disp starts from 200 to 299 */
 	d_pclk_disp = 200, aclk_decon0, m_decon0_eclk, d_decon0_eclk, decon0_eclk,
@@ -1573,7 +1573,7 @@ static struct samsung_composite_divider exynos7420_div_clks[] __refdata = {
 	DIV(dout_mmc2, "dout_sclk_mmc2", "mout_sclk_mmc2", \
 			EXYNOS7420_DIV_TOP1_FSYS0, 16, 10, \
 			EXYNOS7420_DIV_STAT_TOP1_FSYS0, 16, 1, 0, NULL),
-	DIV(none, "dout_sclk_mmc1", "mout_sclk_mmc1", \
+	DIV(dout_mmc1, "dout_sclk_mmc1", "mout_sclk_mmc1", \
 			EXYNOS7420_DIV_TOP1_FSYS11, 0, 10, \
 			EXYNOS7420_DIV_STAT_TOP1_FSYS11, 0, 1, 0, NULL),
 	DIV(dout_mmc0, "dout_sclk_mmc0", "mout_sclk_mmc0", \
@@ -1924,6 +1924,9 @@ static struct samsung_usermux exynos7420_usermux_clks[] __initdata = {
 	USERMUX(usermux_aclk_fsys1_200, "usermux_aclk_fsys1_200", "top_aclk_fsys1_200", \
 			EXYNOS7420_MUX_SEL_FSYS10, 28, \
 			EXYNOS7420_MUX_STAT_FSYS10, 28, 0, NULL),
+	USERMUX(none, "usermux_sclk_mmc1", "top_sclk_mmc1", \
+			EXYNOS7420_MUX_SEL_FSYS11, 24, \
+			EXYNOS7420_MUX_STAT_FSYS11, 24, 0, NULL),
 	USERMUX(none, "usermux_sclk_mmc0", "top_sclk_mmc0", \
 			EXYNOS7420_MUX_SEL_FSYS11, 28, \
 			EXYNOS7420_MUX_STAT_FSYS11, 28, 0, NULL),
@@ -2717,6 +2720,8 @@ static struct samsung_gate exynos7420_gate_clks[] __initdata = {
 			"usb20_div", \
 			EXYNOS7420_ENABLE_SCLK_FSYS04, 12, 0, NULL),
 	/* fsys1 */
+	GATE(sclk_mmc1, "sclk_mmc1", "usermux_sclk_mmc1", \
+			EXYNOS7420_ENABLE_SCLK_FSYS11, 24, 0, NULL),
 	GATE(sclk_mmc0, "sclk_mmc0", "usermux_sclk_mmc0", \
 			EXYNOS7420_ENABLE_SCLK_FSYS11, 28, 0, NULL),
 #ifndef CONFIG_MMC_DW_EXYNOS

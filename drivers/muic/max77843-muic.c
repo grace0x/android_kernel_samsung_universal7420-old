@@ -1234,15 +1234,15 @@ static ssize_t max77843_muic_set_afc_disable(struct device *dev,
 	int ret;
 
 	if (!strncasecmp(buf, "1", 1)) {
-		ret = set_param(CM_OFFSET + 1, '1');
+		ret = sec_set_param(CM_OFFSET + 1, '1');
 		if (ret < 0)
-			pr_err("%s:set_param failed\n", __func__);
+			pr_err("%s:sec_set_param failed\n", __func__);
 		else
 			pdata->afc_disable = true;
 	} else if (!strncasecmp(buf, "0", 1)) {
-		ret = set_param(CM_OFFSET + 1, '0');
+		ret = sec_set_param(CM_OFFSET + 1, '0');
 		if (ret < 0)
-			pr_err("%s:set_param failed\n", __func__);
+			pr_err("%s:sec_set_param failed\n", __func__);
 		else
 			pdata->afc_disable = false;
 	} else {

@@ -9,6 +9,9 @@
  */
 
 #include "melfas_mms400.h"
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+#include <linux/trustedui.h>
+#endif
 
 #if MMS_USE_CMD_MODE
 
@@ -21,6 +24,30 @@ enum CMD_STATUS {
 	CMD_STATUS_FAIL,
 	CMD_STATUS_NONE,
 };
+
+static ssize_t scrub_position_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mms_ts_info *info = dev_get_drvdata(dev);
+	char buff[256] = { 0 };
+
+#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
+	input_info(true, &info->client->dev,
+			"%s: scrub_id: %d\n", __func__, info->scrub_id);
+#else
+	input_info(true, &info->client->dev,
+			"%s: scrub_id: %d, X:%d, Y:%d\n", __func__,
+			info->scrub_id, info->scrub_x, info->scrub_y);
+#endif
+
+	snprintf(buff, sizeof(buff), "%d %d %d", info->scrub_id, info->scrub_x, info->scrub_y);
+
+	info->scrub_id = 0;
+	info->scrub_x = 0;
+	info->scrub_y = 0;
+
+	return snprintf(buf, PAGE_SIZE, "%s", buff);
+}
 
 /**
  * Clear command result
@@ -94,7 +121,7 @@ ERROR:
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -115,6 +142,12 @@ static void cmd_get_fw_ver_bin(void *device_data)
 	int offset = sizeof(struct mms_bin_hdr);
 
 	cmd_clear_result(info);
+
+	if (!fw_name) {
+		sprintf(buf, "%s", "NG");
+		info->cmd_state = CMD_STATUS_FAIL;
+		goto EXIT;
+	}
 
 	request_firmware(&fw, fw_name, &info->client->dev);
 
@@ -142,7 +175,7 @@ static void cmd_get_fw_ver_bin(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 
 }
@@ -174,7 +207,7 @@ static void cmd_get_fw_ver_ic(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -194,7 +227,7 @@ static void cmd_get_chip_vendor(void *device_data)
 
 	info->cmd_state = CMD_STATUS_OK;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -214,7 +247,7 @@ static void cmd_get_chip_name(void *device_data)
 
 	info->cmd_state = CMD_STATUS_OK;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -230,38 +263,10 @@ static void cmd_get_config_ver(void *device_data)
 
 	info->cmd_state = CMD_STATUS_OK;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
-static void get_checksum_data(void *device_data)
-{
-	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
-	char buf[64] = { 0 };
-	u8 rbuf[64];
-	u8 wbuf[64];
-	int val;
-
-	cmd_clear_result(info);
-
-	wbuf[0] = MIP_R0_INFO;
-	wbuf[1] = MIP_R1_INFO_CHECKSUM_REALTIME;
-	if (mms_i2c_read(info, wbuf, 2, rbuf, 1)) {
-		info->cmd_state = CMD_STATUS_FAIL;
-		goto EXIT;
-	}
-
-	val = rbuf[0];
-
-	sprintf(buf, "%d", val);
-	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-
-	info->cmd_state = CMD_STATUS_OK;
-
-EXIT:
-	tsp_debug_err(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
-		__func__, buf, info->cmd_state);
-}
 /**
  * Command : Get X ch num
  */
@@ -290,7 +295,7 @@ static void cmd_get_x_num(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 EXIT:
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -322,7 +327,7 @@ static void cmd_get_y_num(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 EXIT:
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -354,7 +359,7 @@ static void cmd_get_max_x(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 EXIT:
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -386,7 +391,7 @@ static void cmd_get_max_y(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 EXIT:
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -406,7 +411,7 @@ static void cmd_module_off_master(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -426,7 +431,7 @@ static void cmd_module_on_master(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -464,7 +469,7 @@ static void cmd_read_intensity(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -495,7 +500,7 @@ static void cmd_get_intensity(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -533,7 +538,7 @@ static void cmd_read_rawdata(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -564,7 +569,7 @@ static void cmd_get_rawdata(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -602,7 +607,7 @@ static void cmd_run_test_cm_delta(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -633,7 +638,7 @@ static void cmd_get_cm_delta(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -671,7 +676,7 @@ static void cmd_run_test_cm_abs(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -702,7 +707,7 @@ static void cmd_get_cm_abs(void *device_data)
 
 EXIT:
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
 
@@ -710,16 +715,146 @@ static void cmd_get_threshold(void *device_data)
 {
 	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
 	char buf[64] = { 0 };
+	u8 wbuf[2];
+	u8 rbuf[1];
 
 	cmd_clear_result(info);
-	sprintf(buf, "55");
+
+	wbuf[0] = MIP_R0_INFO;
+	wbuf[1] = MIP_R1_INFO_IC_CONTACT_ON_THD;
+	if (mms_i2c_read(info, wbuf, 2, rbuf, 1)) {
+		info->cmd_state = CMD_STATUS_FAIL;
+		sprintf(buf, "%s", "NG");
+		goto EXIT;
+	}
+	input_info(true, &info->client->dev,
+			"%s: read from IC, %d\n",
+			__func__, rbuf[0]);
+	if (rbuf[0] > 0)
+		sprintf(buf, "%d", rbuf[0]);
+	else
+		sprintf(buf, "55");
+
+	info->cmd_state = CMD_STATUS_OK;
+EXIT:
+	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+		__func__, buf, info->cmd_state);
+}
+
+static void dead_zone_enable(void *device_data)
+{
+	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
+	int length = 0;
+	int enable = info->cmd_param[0];
+	u8 wbuf[4];
+	int status;
+
+	cmd_clear_result(info);
+
+	input_info(true, &info->client->dev, "%s %d\n", __func__, enable);
+
+	if (enable)
+		status = 0;
+	else
+		status = 2;
+
+	wbuf[0] = MIP_R0_CTRL;
+	wbuf[1] = MIP_R1_CTRL_DISABLE_EDGE_EXPAND;
+	wbuf[2] = status;
+
+	if ((enable == 0) || (enable == 1)) {
+		if (mms_i2c_write(info, wbuf, 3)) {
+			input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
+			goto out;
+		} else
+			input_info(true, &info->client->dev, "%s - value[%d]\n", __func__, wbuf[2]);
+	} else {
+		input_err(true, &info->client->dev, "%s [ERROR] Unknown value[%d]\n", __func__, status);
+		goto out;
+	}
+	input_dbg(true, &info->client->dev, "%s [DONE] \n", __func__);
+
+	info->cmd_state = CMD_STATUS_OK;
+	length = strlen(info->print_buf);
+	input_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
+
+out:
+	cmd_set_result(info, info->print_buf, length);
+
+	mutex_lock(&info->lock);
+	info->cmd_busy = false;
+	mutex_unlock(&info->lock);
+
+	info->cmd_state = CMD_STATUS_WAITING;
+}
+
+static void get_checksum_data(void *device_data)
+{
+	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
+	char buf[64] = { 0 };
+	u8 rbuf[64];
+	u8 wbuf[64];
+	int val;
+
+	cmd_clear_result(info);
+
+	wbuf[0] = MIP_R0_INFO;
+	wbuf[1] = MIP_R1_INFO_CHECKSUM_REALTIME;
+	if (mms_i2c_read(info, wbuf, 2, rbuf, 1)) {
+		info->cmd_state = CMD_STATUS_FAIL;
+		goto EXIT;
+	}
+
+	val = rbuf[0];
+
+	sprintf(buf, "%d", val);
 	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
 
 	info->cmd_state = CMD_STATUS_OK;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+EXIT:
+	input_err(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
+
+static void clear_cover_mode(void *device_data)
+{
+	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
+	struct i2c_client *client = info->client;
+	char buf[64] = { 0 };
+
+	input_info(true, &client->dev, "%s: %d, %d\n",
+			__func__, info->cmd_param[0], info->cmd_param[1]);
+	cmd_clear_result(info);
+
+	if (info->cmd_param[0] < 0 || info->cmd_param[0] > 3) {
+		sprintf(buf, "NG");
+		info->cmd_state = CMD_STATUS_FAIL;
+	} else {
+		if (info->cmd_param[0] > 1) {
+			info->flip_enable = true;
+			info->cover_type = info->cmd_param[1];
+		} else {
+			info->flip_enable = false;
+		}
+
+		if (info->enabled && !info->init)
+			mms_set_cover_type(info);
+
+		sprintf(buf, "%s", "OK");
+		info->cmd_state = CMD_STATUS_OK;
+	}
+	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
+
+	info->cmd_state = CMD_STATUS_WAITING;
+	
+	mutex_lock(&info->lock);
+	info->cmd_busy = false;
+	mutex_unlock(&info->lock);
+
+	input_info(true, &client->dev, "%s: %s\n", __func__, buf);
+};
 
 static void get_intensity_all_data(void *device_data)
 {
@@ -731,7 +866,7 @@ static void get_intensity_all_data(void *device_data)
 
 	ret = mms_get_image(info, MIP_IMG_TYPE_INTENSITY);
 	if (ret < 0) {
-		tsp_debug_err(true, &info->client->dev, "%s: failed to read intensity, %d\n", __func__, ret);
+		input_err(true, &info->client->dev, "%s: failed to read intensity, %d\n", __func__, ret);
 		sprintf(info->print_buf, "%s", "NG");
 		goto out;
 	}
@@ -739,7 +874,7 @@ static void get_intensity_all_data(void *device_data)
 	info->cmd_state = CMD_STATUS_OK;
 
 	length = strlen(info->print_buf);
-	tsp_debug_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
+	input_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
 
 out:
 	cmd_set_result(info, info->print_buf, length);
@@ -761,14 +896,14 @@ static void get_rawdata_all_data(void *device_data)
 
 	ret = mms_get_image(info, MIP_IMG_TYPE_RAWDATA);
 	if (ret < 0) {
-		tsp_debug_err(true, &info->client->dev, "%s: failed to read raw data, %d\n", __func__, ret);
+		input_err(true, &info->client->dev, "%s: failed to read raw data, %d\n", __func__, ret);
 		sprintf(info->print_buf, "%s", "NG");
 		goto out;
 	}
 
 	info->cmd_state = CMD_STATUS_OK;
 	length = strlen(info->print_buf);
-	tsp_debug_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
+	input_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
 
 out:
 	cmd_set_result(info, info->print_buf, length);
@@ -790,14 +925,14 @@ static void get_cm_delta_all_data(void *device_data)
 
 	ret = mms_run_test(info, MIP_TEST_TYPE_CM_DELTA);
 	if (ret < 0) {
-		tsp_debug_err(true, &info->client->dev, "%s: failed to read cm delta, %d\n", __func__, ret);
+		input_err(true, &info->client->dev, "%s: failed to read cm delta, %d\n", __func__, ret);
 		sprintf(info->print_buf, "%s", "NG");
 		goto out;
 	}
 
 	info->cmd_state = CMD_STATUS_OK;
 	length = strlen(info->print_buf);
-	tsp_debug_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
+	input_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
 
 out:
 	cmd_set_result(info, info->print_buf, length);
@@ -819,14 +954,14 @@ static void get_cm_abs_all_data(void *device_data)
 
 	ret = mms_run_test(info, MIP_TEST_TYPE_CM_ABS);
 	if (ret < 0) {
-		tsp_debug_err(true, &info->client->dev, "%s: failed to read cm abs, %d\n", __func__, ret);
+		input_err(true, &info->client->dev, "%s: failed to read cm abs, %d\n", __func__, ret);
 		sprintf(info->print_buf, "%s", "NG");
 		goto out;
 	}
 
 	info->cmd_state = CMD_STATUS_OK;
 	length = strlen(info->print_buf);
-	tsp_debug_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
+	input_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
 
 out:
 	cmd_set_result(info, info->print_buf, length);
@@ -838,51 +973,60 @@ out:
 	info->cmd_state = CMD_STATUS_WAITING;
 }
 
-static void dead_zone_enable(void *device_data)
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+static void tui_mode_cmd(struct mms_ts_info *info)
 {
-	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
-	int length = 0;
-	int enable = info->cmd_param[0];
-	u8 wbuf[4];
-	int status;
-
+	char buf[16] = "TUImode:FAIL";
 	cmd_clear_result(info);
-
-	tsp_debug_info(true, &info->client->dev, "%s %d\n", __func__, enable);
-
-	if (enable)
-		status = 0;
-	else
-		status = 2;
-
-	wbuf[0] = MIP_R0_CTRL;
-	wbuf[1] = MIP_R1_CTRL_DISABLE_EDGE_EXPAND;
-	wbuf[2] = status;
-
-	if ((enable == 0) || (enable == 1)) {
-		if (mms_i2c_write(info, wbuf, 3)) {
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
-			goto out;
-		} else
-			tsp_debug_info(true, &info->client->dev, "%s - value[%d]\n", __func__, wbuf[2]);
-	} else {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] Unknown value[%d]\n", __func__, status);
-		goto out;
-	}
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE] \n", __func__);
-
-	info->cmd_state = CMD_STATUS_OK;
-	length = strlen(info->print_buf);
-	tsp_debug_err(true, &info->client->dev, "%s: length is %d\n", __func__, length);
-
-out:
-	cmd_set_result(info, info->print_buf, length);
+	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
 
 	mutex_lock(&info->lock);
 	info->cmd_busy = false;
 	mutex_unlock(&info->lock);
 
 	info->cmd_state = CMD_STATUS_WAITING;
+	dev_err(&info->client->dev, "%s: %s(%d)\n", __func__, buf,
+		  (int)strnlen(buf, sizeof(buf)));
+}
+#endif
+
+static void spay_enable(void *device_data)
+{
+	struct mms_ts_info *info = (struct mms_ts_info *)device_data;
+	char buf[64] = { 0 };
+
+	cmd_clear_result(info);
+
+	if (!info->dtdata->support_lpm) {
+		input_err(true, &info->client->dev, "%s not supported\n", __func__);
+		snprintf(buf, sizeof(buf), "%s", NAME_OF_UNKNOWN_CMD);
+		info->cmd_state = CMD_STATUS_NONE;
+		goto out;
+	}
+
+	if (info->cmd_param[0]) {
+		info->lowpower_mode = true;
+		info->lowpower_flag = info->lowpower_flag | MMS_LPM_FLAG_SPAY;
+	} else {
+		info->lowpower_flag = info->lowpower_flag & ~(MMS_LPM_FLAG_SPAY);
+		if (!info->lowpower_flag)
+			info->lowpower_mode = false;
+	}
+
+	input_info(true, &info->client->dev, "%s: %s mode, %x\n",
+			__func__, info->lowpower_mode ? "LPM" : "normal",
+			info->lowpower_flag);
+	snprintf(buf, sizeof(buf), "%s", "OK");
+
+out:
+	cmd_set_result(info, buf, strnlen(buf, sizeof(buf)));
+
+	mutex_lock(&info->lock);
+	info->cmd_busy = false;
+	mutex_unlock(&info->lock);
+
+	info->cmd_state = CMD_STATUS_WAITING;
+	input_info(true, &info->client->dev, "%s: %s\n", __func__, buf);
 }
 
 /**
@@ -904,9 +1048,13 @@ static void cmd_unknown_cmd(void *device_data)
 	info->cmd_busy = false;
 	mutex_unlock(&info->lock);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 }
+
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+static void tui_mode_cmd(struct mms_ts_info *info);
+#endif
 
 #define MMS_CMD(name, func)	.cmd_name = name, .cmd_func = func
 
@@ -928,7 +1076,6 @@ static struct mms_cmd mms_commands[] = {
 	{MMS_CMD("get_fw_ver_ic", cmd_get_fw_ver_ic),},
 	{MMS_CMD("get_chip_vendor", cmd_get_chip_vendor),},
 	{MMS_CMD("get_chip_name", cmd_get_chip_name),},
-	{MMS_CMD("get_checksum_data", get_checksum_data),},
 	{MMS_CMD("get_x_num", cmd_get_x_num),},
 	{MMS_CMD("get_y_num", cmd_get_y_num),},
 	{MMS_CMD("get_max_x", cmd_get_max_x),},
@@ -951,9 +1098,12 @@ static struct mms_cmd mms_commands[] = {
 	{MMS_CMD("get_rawdata_all_data", get_rawdata_all_data),},
 	{MMS_CMD("get_cm_delta_all_data", get_cm_delta_all_data),},
 	{MMS_CMD("get_cm_abs_all_data", get_cm_abs_all_data),},
-	{MMS_CMD("dead_zone_enable", dead_zone_enable),},
 	{MMS_CMD("module_off_slave", cmd_unknown_cmd),},
 	{MMS_CMD("module_on_slave", cmd_unknown_cmd),},
+	{MMS_CMD("dead_zone_enable", dead_zone_enable),},
+	{MMS_CMD("get_checksum_data", get_checksum_data),},
+	{MMS_CMD("clear_cover_mode", clear_cover_mode),},
+	{MMS_CMD("spay_enable", spay_enable),},
 	{MMS_CMD(NAME_OF_UNKNOWN_CMD, cmd_unknown_cmd),},
 };
 
@@ -976,21 +1126,21 @@ static ssize_t mms_sys_cmd(struct device *dev, struct device_attribute *devattr,
 	if (!info) {
 		pr_err("%s [ERROR] mms_ts_info not found\n", __func__);
 		ret = -EINVAL;
-		goto ERROR;
+		return ret;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
-	tsp_debug_dbg(true, &info->client->dev, "%s - input [%s]\n", __func__, buf);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s - input [%s]\n", __func__, buf);
 
 	if (!info->input_dev) {
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s [ERROR] input_dev not found\n", __func__);
 		ret = -EINVAL;
 		goto ERROR;
 	}
 
 	if (info->cmd_busy == true) {
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s [ERROR] previous command is not ended\n", __func__);
 		ret = -1;
 		goto ERROR;
@@ -1018,7 +1168,7 @@ static ssize_t mms_sys_cmd(struct device *dev, struct device_attribute *devattr,
 	else
 		memcpy(cbuf, buf, len);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - command [%s]\n", __func__, cbuf);
+	input_dbg(true, &info->client->dev, "%s - command [%s]\n", __func__, cbuf);
 
 	//command
 	list_for_each_entry(mms_cmd_ptr, &info->cmd_list_head, list) {
@@ -1058,20 +1208,25 @@ static ssize_t mms_sys_cmd(struct device *dev, struct device_attribute *devattr,
 	}
 
 	//print
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd [%s]\n", __func__, mms_cmd_ptr->cmd_name);
+	input_dbg(true, &info->client->dev, "%s - cmd [%s]\n", __func__, mms_cmd_ptr->cmd_name);
 	for (i = 0; i < param_cnt; i++) {
-		tsp_debug_dbg(true, &info->client->dev,
+		input_dbg(true, &info->client->dev,
 			"%s - param #%d [%d]\n", __func__, i, info->cmd_param[i]);
 	}
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	if (TRUSTEDUI_MODE_INPUT_SECURED & trustedui_get_current_mode())
+		tui_mode_cmd(info);
+	else
+#endif
 	//execute
 	mms_cmd_ptr->cmd_func(info);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return count;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return count;
 }
 static DEVICE_ATTR(cmd, 0666, NULL, mms_sys_cmd);
@@ -1086,9 +1241,9 @@ static ssize_t mms_sys_cmd_status(struct device *dev,
 	int ret;
 	char cbuf[32] = {0};
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - status [%d]\n", __func__, info->cmd_state);
+	input_dbg(true, &info->client->dev, "%s - status [%d]\n", __func__, info->cmd_state);
 
 	if (info->cmd_state == CMD_STATUS_WAITING) {
 		snprintf(cbuf, sizeof(cbuf), "WAITING");
@@ -1105,7 +1260,7 @@ static ssize_t mms_sys_cmd_status(struct device *dev,
 	ret = snprintf(buf, PAGE_SIZE, "%s\n", cbuf);
 	//memset(info->print_buf, 0, 4096);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	return ret;
 }
@@ -1120,9 +1275,9 @@ static ssize_t mms_sys_cmd_result(struct device *dev,
 	struct mms_ts_info *info = dev_get_drvdata(dev);
 	int ret;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - result [%s]\n", __func__, info->cmd_result);
+	input_dbg(true, &info->client->dev, "%s - result [%s]\n", __func__, info->cmd_result);
 
 	mutex_lock(&info->lock);
 	info->cmd_busy = false;
@@ -1134,7 +1289,7 @@ static ssize_t mms_sys_cmd_result(struct device *dev,
 	ret = snprintf(buf, PAGE_SIZE, "%s\n", info->cmd_result);
 	//memset(info->print_buf, 0, 4096);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	return ret;
 }
@@ -1152,7 +1307,7 @@ static ssize_t mms_sys_cmd_list(struct device *dev,
 	char buffer[info->cmd_buffer_size];
 	char buffer_name[CMD_LEN];
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	snprintf(buffer, 30, "== Command list ==\n");
 	while (strncmp(mms_commands[i].cmd_name, NAME_OF_UNKNOWN_CMD, CMD_LEN) != 0) {
@@ -1161,17 +1316,18 @@ static ssize_t mms_sys_cmd_list(struct device *dev,
 		i++;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
+	input_dbg(true, &info->client->dev, "%s - cmd[%s] state[%d]\n",
 		__func__, buf, info->cmd_state);
 
 	ret = snprintf(buf, PAGE_SIZE, "%s\n", buffer);
 	//memset(info->print_buf, 0, 4096);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	return ret;
 }
 static DEVICE_ATTR(cmd_list, 0666, mms_sys_cmd_list, NULL);
+static DEVICE_ATTR(scrub_pos, S_IRUGO, scrub_position_show, NULL);
 
 /**
  * Sysfs - cmd attr info
@@ -1181,6 +1337,7 @@ static struct attribute *mms_cmd_attr[] = {
 	&dev_attr_cmd_status.attr,
 	&dev_attr_cmd_result.attr,
 	&dev_attr_cmd_list.attr,
+	&dev_attr_scrub_pos.attr,
 	NULL,
 };
 
@@ -1216,7 +1373,7 @@ int mms_sysfs_cmd_create(struct mms_ts_info *info)
 
 	//create sysfs
 	if (sysfs_create_group(&client->dev.kobj, &mms_cmd_attr_group)) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
 		return -EAGAIN;
 	}
 
@@ -1225,12 +1382,12 @@ int mms_sysfs_cmd_create(struct mms_ts_info *info)
 	//info->cmd_dev = device_create(info->cmd_class, NULL, info->cmd_dev_t, NULL, "touchscreen");
 	info->cmd_dev = sec_device_create(info, "tsp");
 	if (sysfs_create_group(&info->cmd_dev->kobj, &mms_cmd_attr_group)) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
 		return -EAGAIN;
 	}
 
 	if (sysfs_create_link(&info->cmd_dev->kobj, &info->input_dev->dev.kobj, "input")) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] sysfs_create_link\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] sysfs_create_link\n", __func__);
 		return -EAGAIN;
 	}
 

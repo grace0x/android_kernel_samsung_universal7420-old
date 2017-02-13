@@ -132,6 +132,12 @@ static int s2m_is_enabled_regmap(struct regulator_dev *rdev)
 	struct s2mps15_info *s2mps15 = rdev_get_drvdata(rdev);
 	int ret, reg_id = rdev_get_id(rdev);
 	unsigned int val;
+	/* DVS regulators (MIF, ATLAS, APOLLO, INT, DISP_CAM0) */
+	if (reg_id == S2MPS15_BUCK1 || reg_id == S2MPS15_BUCK2 ||
+		reg_id == S2MPS15_BUCK3 || reg_id == S2MPS15_BUCK4 ||
+		reg_id == S2MPS15_BUCK5)
+		return 1;
+
 	/* BUCK6 is controlled by g3d gpio */
 	if (reg_id == S2MPS15_BUCK6 && SEC_PMIC_REV(s2mps15->iodev)
 		&& s2mps15->g3d_en && gpio_is_valid(s2mps15->g3d_pin)) {

@@ -1,7 +1,6 @@
 #
 # Makefile for the sensor hub.
 #
-
 ifdef CONFIG_SENSORS_SSP_NOBLELTE
 	obj-$(CONFIG_SENSORS_SSP_BBD)	+= brcm/
 	obj-$(CONFIG_SENSORS_SSP_STM)	+= stm/
@@ -20,4 +19,5 @@ else
 	endif
 endif
 
+obj-$(CONFIG_SENSORS_SSP_STM32)	+= stm32/
 obj-$(CONFIG_SENSORS_SSP_ATMEL)	+= atmel/

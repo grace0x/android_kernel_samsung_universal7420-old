@@ -39,7 +39,7 @@
 #define DSIM_RX_FIFO_READ_DONE	(0x30800002)
 #define DSIM_MAX_RX_FIFO	(64)
 
-#define AID_INTERPOLATION
+//#define AID_INTERPOLATION
 
 #define dsim_err(fmt, ...)					\
 	do {							\
@@ -97,23 +97,20 @@ struct dsim_resources {
 	struct regulator *regulator_18V;
 	struct regulator *regulator_16V;
 };
-
+#define PANEL_NUM_MAX 2
 struct panel_private {
 
 	struct backlight_device *bd;
 	unsigned char id[3];
-	unsigned char code[5];
-	unsigned char elvss_set[22];
-	unsigned char tset[30];	// HA3 is 30
-	unsigned char aid[16];
+	unsigned char code[PANEL_NUM_MAX][5];
+	unsigned char elvss_set[PANEL_NUM_MAX][22];
+	unsigned char tset[PANEL_NUM_MAX][30];	// HA3 is 30
+	unsigned char aid[PANEL_NUM_MAX][16];
 	int	temperature;
-	unsigned int coordinate[2];
-	unsigned char date[7];
-	unsigned int lcdConnected;
+	unsigned int coordinate[PANEL_NUM_MAX][2];
+	unsigned char date[PANEL_NUM_MAX][7];
+	unsigned int lcdConnected[PANEL_NUM_MAX];
 	unsigned int state;
-	unsigned int auto_brightness;
-	unsigned int auto_brightness_level;
-	unsigned int brightness_step;
 	unsigned int br_index;
 	unsigned int acl_enable;
 	unsigned int caps_enable;
@@ -122,8 +119,8 @@ struct panel_private {
 	unsigned int current_vint;
 	unsigned int siop_enable;
 
-	void *dim_data;
-	void *dim_info;
+	void *dim_data[PANEL_NUM_MAX];
+	void *dim_info[PANEL_NUM_MAX];
 	unsigned int *br_tbl;
 	unsigned char *inter_aor_tbl;
 	unsigned int *hbm_inter_br_tbl;
@@ -163,8 +160,6 @@ struct panel_private {
 	char hbm_elvss_comp;
 	unsigned char hbm_elvss;
 	unsigned int hbm_index;
-/* hbm interpolation for color weakness */
-	unsigned int weakness_hbm_comp;
 
 /*variable for A3 Line */
 	struct delayed_work octa_a3_read_data_work;
@@ -179,6 +174,8 @@ struct panel_private {
 	char* strDatFile;
 
 	int esd_disable;
+	int lux;
+	struct class *mdnie_class;
 };
 
 struct dsim_panel_ops {
@@ -331,4 +328,6 @@ u32 dsim_reg_get_hozval(u32 id);
 
 int dsim_write_hl_data(struct dsim_device *dsim, const u8 *cmd, u32 cmdSize);
 int dsim_read_hl_data(struct dsim_device *dsim, u8 addr, u32 size, u8 *buf);
+int get_panel_index_init(void);
+
 #endif /* __DSIM_H__ */

@@ -118,6 +118,10 @@ static bool cluster1_hotplugged = false;
 extern bool is_cpu_thermal;
 #endif
 
+#ifdef CONFIG_SW_SELF_DISCHARGING
+static int self_discharging;
+#endif
+
 /* Include CPU mask of each cluster */
 cluster_type exynos_boot_cluster;
 static cluster_type boot_cluster;
@@ -1448,6 +1452,34 @@ static void dvfs_reset_work_fn(struct work_struct *work)
 }
 #endif
 
+#ifdef CONFIG_SW_SELF_DISCHARGING
+static ssize_t show_cpufreq_self_discharging(struct kobject *kobj,
+			     struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", self_discharging);
+}
+
+static ssize_t store_cpufreq_self_discharging(struct kobject *kobj, struct attribute *attr,
+			      const char *buf, size_t count)
+{
+	int input;
+
+	if (!sscanf(buf, "%d", &input))
+		return -EINVAL;
+
+	if (input > 0) {
+		self_discharging = input;
+		cpu_idle_poll_ctrl(true);
+	}
+	else {
+		self_discharging = 0;
+		cpu_idle_poll_ctrl(false);
+	}
+
+	return count;
+}
+#endif
+
 inline ssize_t show_core_freq_table(char *buf, cluster_type cluster)
 {
 	int i, count = 0;
@@ -1683,6 +1715,12 @@ static struct global_attr cpufreq_min_limit =
 static struct global_attr cpufreq_max_limit =
 		__ATTR(cpufreq_max_limit, S_IRUGO | S_IWUSR,
 			show_cpufreq_max_limit, store_cpufreq_max_limit);
+#endif
+
+#ifdef CONFIG_SW_SELF_DISCHARGING
+static struct global_attr cpufreq_self_discharging =
+		__ATTR(cpufreq_self_discharging, S_IRUGO | S_IWUSR,
+			show_cpufreq_self_discharging, store_cpufreq_self_discharging);
 #endif
 
 /************************** sysfs end ************************/
@@ -2203,6 +2241,14 @@ static int __init exynos_cpufreq_init(void)
 	}
 #endif
 
+#ifdef CONFIG_SW_SELF_DISCHARGING
+	ret = sysfs_create_file(power_kobj, &cpufreq_self_discharging.attr);
+	if (ret) {
+		pr_err("%s: failed to create cpufreq_self_discharging sysfs interface\n", __func__);
+		goto err_cpufreq_self_discharging;
+	}
+#endif
+
 #if defined(CONFIG_PMU_COREMEM_RATIO)
 	if (exynos_info[CL_ZERO]->region_bus_table || exynos_info[CL_ONE]->region_bus_table) {
 #else
@@ -2232,6 +2278,12 @@ static int __init exynos_cpufreq_init(void)
 	return 0;
 
 err_workqueue:
+#ifdef CONFIG_SW_SELF_DISCHARGING
+err_cpufreq_self_discharging:
+#ifdef CONFIG_PM
+	sysfs_remove_file(power_kobj, &cpufreq_max_limit.attr);
+#endif
+#endif
 #ifdef CONFIG_PM
 err_cpufreq_max_limit:
 	sysfs_remove_file(power_kobj, &cpufreq_min_limit.attr);

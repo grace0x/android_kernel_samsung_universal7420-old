@@ -94,3 +94,9 @@ config CAMERA_ROYCE
         default n
         help
           This camera is royce project.
+config CAMERA_A8XE
+        bool "This camera is a8xe project"
+        depends on VIDEO_EXYNOS_FIMC_IS
+        default n
+        help
+          This camera is a8xe project.

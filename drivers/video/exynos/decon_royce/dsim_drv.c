@@ -347,7 +347,7 @@ int dsim_write_hl_data(struct dsim_device *dsim, const u8 *cmd, u32 cmdSize)
 	int retry;
 	struct panel_private *panel = &dsim->priv;
 
-	if (panel->lcdConnected == PANEL_DISCONNEDTED)
+	if (panel->lcdConnected[get_panel_index_init()] == PANEL_DISCONNEDTED)
 		return cmdSize;
 
 	//mutex_lock(&dsim->rdwr_lock);
@@ -377,7 +377,7 @@ int dsim_read_hl_data(struct dsim_device *dsim, u8 addr, u32 size, u8 *buf)
 	int retry = 5;
 	struct panel_private *panel = &dsim->priv;
 
-	if (panel->lcdConnected == PANEL_DISCONNEDTED)
+	if (panel->lcdConnected[get_panel_index_init()] == PANEL_DISCONNEDTED)
 		return size;
 
 try_read:
@@ -402,7 +402,7 @@ static int dsim_partial_area_command(struct dsim_device *dsim, void *arg)
 	char data_2b[5];
 	int retry;
 
-	if (panel->lcdConnected == PANEL_DISCONNEDTED)
+	if (panel->lcdConnected[get_panel_index_init()] == PANEL_DISCONNEDTED)
 		return 0;
 
 	/* w is right & h is bottom */
@@ -1006,7 +1006,7 @@ static int dsim_reset_panel(struct dsim_device *dsim)
 
 	gpio_free(res->lcd_reset);
 
-	usleep_range(10000, 11000);
+	usleep_range(31000, 32000);
 
 	dsim_dbg("%s -\n", __func__);
 	return 0;
@@ -1050,7 +1050,7 @@ static int dsim_set_panel_power(struct dsim_device *dsim, bool on)
 					return -EINVAL;
 				}
 			}
-			usleep_range(10000, 11000);
+			//usleep_range(10000, 11000);
 		}
 			if (res->regulator_16V) {
 			if (!regulator_is_enabled(res->regulator_16V)) {
@@ -1080,7 +1080,7 @@ static int dsim_set_panel_power(struct dsim_device *dsim, bool on)
 					return -EINVAL;
 				}
 			}
-			usleep_range(10000, 11000);
+			usleep_range(26000, 27000);
 		}
 
 		if (dsim->lcd_info.mode != DECON_VIDEO_MODE) {
@@ -1098,6 +1098,7 @@ static int dsim_set_panel_power(struct dsim_device *dsim, bool on)
 			return -EINVAL;
 		}
 		gpio_free(res->lcd_reset);
+		usleep_range(14000, 15000);
 
 		if (res->lcd_power[0] > 0) {
 			ret = gpio_request_one(res->lcd_power[0], GPIOF_OUT_INIT_LOW, "lcd_power0");
@@ -1829,10 +1830,17 @@ static int dsim_probe(struct platform_device *pdev)
 		/* DPHY power on: it is required to maintain ref_count */
 		dsim_d_phy_onoff(dsim, 1);
 
-		dsim_reg_init_probe(dsim->id, &dsim->lcd_info, dsim->data_lane_cnt);
+		if (dsim->lcd_info.mode != DECON_VIDEO_MODE)
+			dsim_reg_init_probe(dsim->id, &dsim->lcd_info, dsim->data_lane_cnt);
+
+		if (dsim->lcd_info.mode == DECON_VIDEO_MODE)
+			dsim_reg_set_stop_state_cnt(dsim->id);
 
 		clk_prepare_enable(dsim->res.dphy_esc);
 		clk_prepare_enable(dsim->res.dphy_byte);
+
+		if (dsim->lcd_info.mode == DECON_VIDEO_MODE)
+			goto dsim_init_done;
 
 		ret = dsim_reg_set_lanes(dsim->id, DSIM_LANE_CLOCK | dsim->data_lane, 1);
 		if (ret) {

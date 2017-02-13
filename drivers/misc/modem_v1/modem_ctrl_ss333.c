@@ -23,6 +23,8 @@
 #include "modem_prj.h"
 #include "modem_utils.h"
 
+#include <linux/modem_notifier.h>
+
 #include <linux/of_gpio.h>
 
 #define MIF_INIT_TIMEOUT	(30 * HZ)
@@ -74,6 +76,8 @@ void modem_state_change(struct modem_ctl *mc, enum modem_state new_state)
 
 	if (mc->bootd && mc->bootd->modem_state_changed)
 		mc->bootd->modem_state_changed(mc->bootd, new_state);
+
+	modem_notify_event(new_state);
 }
 
 static irqreturn_t cp_active_handler(int irq, void *arg)
@@ -308,6 +312,9 @@ static int ss333_reset(struct modem_ctl *mc)
 {
 	mif_err("+++\n");
 
+	if (mc->phone_state == STATE_ONLINE)
+		modem_notify_event(MODEM_EVENT_RESET);
+
 	if (ss333_off(mc))
 		return -EIO;
 
@@ -452,6 +459,8 @@ static int ss333_boot_off(struct modem_ctl *mc)
 
 	atomic_set(&mc->forced_cp_crash, 0);
 
+	modem_notify_event(MODEM_EVENT_ONLINE);
+
 	mif_err("---\n");
 	return 0;
 }
@@ -595,6 +604,7 @@ static int modemctl_notify_call(struct notifier_block *nfb,
 		break;
 	}
 
+	modem_notify_event(event);
 	return 0;
 }
 

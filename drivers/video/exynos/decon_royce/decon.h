@@ -793,7 +793,8 @@ struct decon_device {
 	bool				sblock_disable;
 	bool				sdma_map_disable;
 #ifdef CONFIG_FOLDER_DUAL_PANEL
-	int hall_ic_state;
+	int				hall_ic_state;
+	bool				panel_flipping;
 #endif
 };
 

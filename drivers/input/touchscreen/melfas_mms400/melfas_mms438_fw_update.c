@@ -50,11 +50,11 @@ static int mms_isc_read_status(struct mms_ts_info *info)
 		},
 	};
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	do {
 		if (i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg))!=ARRAY_SIZE(msg)) {
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
+			input_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 			return -1;
 		}
 
@@ -65,7 +65,7 @@ static int mms_isc_read_status(struct mms_ts_info *info)
 			ret = -1;
 			msleep(1);
 		} else {
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] wrong value [0x%02X]\n",
+			input_err(true, &info->client->dev, "%s [ERROR] wrong value [0x%02X]\n",
 				__func__, result);
 			ret = -1;
 			msleep(1);
@@ -73,13 +73,13 @@ static int mms_isc_read_status(struct mms_ts_info *info)
 	} while (--cnt);
 
 	if (!cnt) {
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s [ERROR] count overflow - cnt [%d] status [0x%02X]\n",
 			__func__, cnt, result);
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	return ret;
 
@@ -103,12 +103,12 @@ static int mms_isc_erase_page(struct mms_ts_info *info, int offset)
 		},
 	};
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	write_buf[4] = (u8)(((offset)>>8) & 0xFF);
 	write_buf[5] = (u8)(((offset)>>0) & 0xFF);
 	if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 		goto ERROR;
 	}
 
@@ -116,7 +116,7 @@ static int mms_isc_erase_page(struct mms_ts_info *info, int offset)
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE] - Offset [0x%04X]\n", __func__, offset);
+	input_dbg(true, &info->client->dev, "%s [DONE] - Offset [0x%04X]\n", __func__, offset);
 
 	return 0;
 
@@ -145,16 +145,16 @@ static int mms_isc_read_page(struct mms_ts_info *info, int offset, u8 *data)
 		},
 	};
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	write_buf[4] = (u8)(((offset)>>8) & 0xFF);
 	write_buf[5] = (u8)(((offset)>>0) & 0xFF);
 	if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE] - Offset [0x%04X]\n", __func__, offset);
+	input_dbg(true, &info->client->dev, "%s [DONE] - Offset [0x%04X]\n", __func__, offset);
 
 	return 0;
 
@@ -170,10 +170,10 @@ static int mms_isc_program_page(struct mms_ts_info *info, int offset,
 {
 	u8 write_buf[134] = ISC_CMD_PROGRAM_PAGE;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	if (length > 128) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] page length overflow\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] page length overflow\n", __func__);
 		goto ERROR;
 	}
 
@@ -183,7 +183,7 @@ static int mms_isc_program_page(struct mms_ts_info *info, int offset,
 	memcpy(&write_buf[6], data, length);
 
 	if (i2c_master_send(info->client, write_buf, length+6 )!=length+6) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
 		goto ERROR;
 	}
 
@@ -191,7 +191,7 @@ static int mms_isc_program_page(struct mms_ts_info *info, int offset,
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE] - Offset[0x%04X] Length[%d]\n",
+	input_dbg(true, &info->client->dev, "%s [DONE] - Offset[0x%04X] Length[%d]\n",
 		__func__, offset, length);
 
 	return 0;
@@ -207,14 +207,14 @@ static int mms_isc_exit(struct mms_ts_info *info)
 {
 	u8 write_buf[6] = ISC_CMD_EXIT;
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	return 0;
 
@@ -257,13 +257,13 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	u8 initData[ISC_PAGE_SIZE];
 	memset(initData, 0xFF, sizeof(initData));
 
-	tsp_debug_dbg(true, &client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &client->dev, "%s [START]\n", __func__);
 
 	//Read firmware file
 	fw_hdr = (struct mms_bin_hdr *)fw_data;
 	img = kzalloc(sizeof(*img) * fw_hdr->section_num, GFP_KERNEL);
 	if (!img) {
-		tsp_debug_err(true, &client->dev, "Failed to allocate memory\n");
+		input_err(true, &client->dev, "Failed to allocate memory\n");
 		nRet = -ENOMEM;
 		goto err_alloc_img;
 	}
@@ -271,7 +271,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 
 	//Check firmware file
 	if (memcmp(CHIP_FW_CODE, &fw_hdr->tag[4], 4)) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] F/W file is not for %s\n",
+		input_err(true, &client->dev, "%s [ERROR] F/W file is not for %s\n",
 			__func__, CHIP_NAME);
 
 		nRet = fw_err_file_type;
@@ -287,20 +287,20 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	}
 
 	if (retires < 0) {
-		tsp_debug_err(true, &client->dev,
+		input_err(true, &client->dev,
 			"%s [ERROR] cannot read chip firmware version\n",__func__);
 
 		memset(ver_chip, 0xFFFF, sizeof(ver_chip));
-		tsp_debug_dbg(true, &client->dev,
+		input_dbg(true, &client->dev,
 			"%s - Chip firmware version is set to [0xFFFF]\n", __func__);
 	} else {
-		tsp_debug_info(true, &client->dev,
+		input_info(true, &client->dev,
 			"%s - Chip firmware version [0x%04X 0x%04X 0x%04X 0x%04X]\n",
 			__func__, ver_chip[0], ver_chip[1], ver_chip[2], ver_chip[3]);
 	}
 
 	//Set update flag
-	tsp_debug_info(true, &client->dev,
+	input_info(true, &client->dev,
 		"%s - Firmware file info : Sections[%d] Offset[0x%08X] Length[0x%08X]\n",
 		__func__, fw_hdr->section_num, fw_hdr->binary_offset, fw_hdr->binary_length);
 
@@ -308,13 +308,13 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 		img[i] = (struct mms_fw_img *)(fw_data + offset);
 		ver_file[i] = img[i]->version;
 
-		tsp_debug_dbg(true, &client->dev,
+		input_dbg(true, &client->dev,
 			"%s - Section info : Section[%d] Version[0x%04X] StartPage[%d]"
 			" EndPage[%d] Offset[0x%08X] Length[0x%08X]\n",
 			__func__, i, img[i]->version, img[i]->start_page,
 			img[i]->end_page,img[i]->offset, img[i]->length);
 
-		tsp_debug_err(true, &client->dev,
+		input_err(true, &client->dev,
 			"%s - Section[%d] IC: %04X / BIN: %04X\n",
 			__func__, i, ver_chip[i], ver_file[i]);
 
@@ -324,7 +324,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 			update_flag = true;
 			update_flags[i] = true;
 
-			tsp_debug_info(true, &client->dev,
+			input_info(true, &client->dev,
 				"%s - Section[%d] is need to be updated.", __func__, i);
 		}
 	}
@@ -337,13 +337,13 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 		update_flags[2] = true;
 		update_flags[3] = true;
 
-		tsp_debug_info(true, &client->dev, "%s - Force update\n", __func__);
+		input_info(true, &client->dev, "%s - Force update\n", __func__);
 	}
 
 	//Exit when up-to-date
 	if (update_flag == false) {
 		nRet = fw_err_uptodate;
-		tsp_debug_dbg(true, &client->dev,
+		input_dbg(true, &client->dev,
 			"%s [DONE] Chip firmware is already up-to-date\n", __func__);
 		goto EXIT;
 	}
@@ -371,14 +371,14 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	//Load firmware data
 	data = kzalloc(sizeof(u8) * fw_hdr->binary_length, GFP_KERNEL);
 	if (!data) {
-		tsp_debug_err(true, &client->dev, "Failed to allocate memory\n");
+		input_err(true, &client->dev, "Failed to allocate memory\n");
 		nRet = -ENOMEM;
 		goto err_alloc_data;
 	}
 	size = fw_hdr->binary_length;
 	cpydata = kzalloc(ISC_PAGE_SIZE, GFP_KERNEL);
 	if (!cpydata) {
-		tsp_debug_err(true, &client->dev, "Failed to allocate memory\n");
+		input_err(true, &client->dev, "Failed to allocate memory\n");
 		nRet = -ENOMEM;
 		goto err_alloc_cpydata;
 	}
@@ -394,7 +394,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 
 	if ((nLast) % 8 != 0) {
 		nRet = fw_err_file_type;
-		tsp_debug_err(true, &client->dev, "%s [ERROR] Firmware size mismatch\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] Firmware size mismatch\n", __func__);
 		goto ERROR;
 	} else
 		memcpy(data,fw_data+fw_hdr->binary_offset,fw_hdr->binary_length);
@@ -404,31 +404,31 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	nTransferLength = ISC_PAGE_SIZE;
 
 	//Erase first page
-	tsp_debug_info(true, &client->dev, "%s - Erase first page : Offset[0x%04X]\n",
+	input_info(true, &client->dev, "%s - Erase first page : Offset[0x%04X]\n",
 				__func__, offsetStart);
 	nRet = mms_isc_erase_page(info, offsetStart);
 	if (nRet != 0) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] clear first page failed\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] clear first page failed\n", __func__);
 		goto ERROR;
 	}
 
 	//Flash firmware
-	tsp_debug_info(true, &client->dev, "%s - Start Download : Offset Start[0x%04X] End[0x%04X]\n",
+	input_info(true, &client->dev, "%s - Start Download : Offset Start[0x%04X] End[0x%04X]\n",
 				__func__, nOffset, offsetStart);
 	while( nOffset >= offsetStart )
 	{
-		tsp_debug_dbg(true, &client->dev, "%s - Downloading : Offset[0x%04X]\n", __func__, nOffset);
+		input_dbg(true, &client->dev, "%s - Downloading : Offset[0x%04X]\n", __func__, nOffset);
 
 		//Program (erase and write) a page
 		nRet = mms_isc_program_page(info, nOffset, &data[nOffset], nTransferLength);
 		if (nRet != 0) {
-			tsp_debug_err(true, &client->dev, "%s [ERROR] isc_program_page\n", __func__);
+			input_err(true, &client->dev, "%s [ERROR] isc_program_page\n", __func__);
 			goto ERROR;
 		}
 
 		//Verify (read and compare)
 		if (mms_isc_read_page(info, nOffset, cpydata)) {
-			tsp_debug_err(true, &client->dev, "%s [ERROR] mms_isc_read_page\n", __func__);
+			input_err(true, &client->dev, "%s [ERROR] mms_isc_read_page\n", __func__);
 			goto ERROR;
 		}
 
@@ -439,7 +439,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 			print_hex_dump(KERN_ERR, "Firmware Page Read : ",
 				DUMP_PREFIX_OFFSET, 16, 1, cpydata, ISC_PAGE_SIZE, false);
 #endif
-			tsp_debug_err(true, &client->dev, "%s [ERROR] verify page failed\n", __func__);
+			input_err(true, &client->dev, "%s [ERROR] verify page failed\n", __func__);
 
 			ret = -1;
 			goto ERROR;
@@ -451,7 +451,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	//Exit ISC
 	nRet = mms_isc_exit(info);
 	if (nRet != 0) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] mms_isc_exit\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] mms_isc_exit\n", __func__);
 		goto ERROR;
 	}
 
@@ -460,7 +460,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 
 	//Check chip firmware version
 	if (mms_get_fw_version_u16(info, ver_chip)) {
-		tsp_debug_err(true, &client->dev,
+		input_err(true, &client->dev,
 			"%s [ERROR] cannot read chip firmware version after flash\n", __func__);
 
 		nRet = -1;
@@ -468,7 +468,7 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	} else {
 		for (i = 0; i < fw_hdr->section_num; i++) {
 			if (ver_chip[i] != ver_file[i]) {
-				tsp_debug_err(true, &client->dev,
+				input_err(true, &client->dev,
 					"%s [ERROR] version mismatch after flash."
 					" Section[%d] : Chip[0x%04X] != File[0x%04X]\n",
 					__func__, i, ver_chip[i], ver_file[i]);
@@ -480,11 +480,11 @@ int mms_flash_fw(struct mms_ts_info *info, const u8 *fw_data,
 	}
 
 	nRet = 0;
-	tsp_debug_dbg(true, &client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &client->dev, "%s [DONE]\n", __func__);
 	goto DONE;
 
 ERROR:
-	tsp_debug_err(true, &client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &client->dev, "%s [ERROR]\n", __func__);
 DONE:
 	kfree(cpydata);
 err_alloc_cpydata:

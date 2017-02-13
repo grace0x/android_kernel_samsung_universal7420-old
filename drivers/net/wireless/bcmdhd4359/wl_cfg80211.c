@@ -9152,17 +9152,16 @@ wl_cfg80211_stop_ap(
 		 * Don't do a down or "WLC_SET_AP 0" since the shared
 		 * interface may be still running
 		 */
-		if (is_rsdb_supported) {
-			if ((err = wl_cfg80211_add_del_bss(cfg, dev,
-				bssidx, NL80211_IFTYPE_STATION, 0, NULL)) < 0) {
-				if ((err = wldev_ioctl(dev, WLC_SET_AP, &ap, sizeof(s32),
-					true)) < 0) {
-					WL_ERR(("setting AP mode failed %d \n", err));
-					err = -ENOTSUPP;
-					goto exit;
-				}
+		if ((err = wl_cfg80211_add_del_bss(cfg, dev,
+			bssidx, NL80211_IFTYPE_STATION, 0, NULL)) < 0) {
+			if ((err = wldev_ioctl(dev, WLC_SET_AP, &ap, sizeof(s32),
+				true)) < 0) {
+				WL_ERR(("setting AP mode failed %d \n", err));
+				err = -ENOTSUPP;
+				goto exit;
 			}
-		} else if (is_rsdb_supported == 0) {
+		}
+		if (is_rsdb_supported == 0) {
 			err = wldev_ioctl(dev, WLC_SET_INFRA, &infra, sizeof(s32), true);
 			if (err < 0) {
 				WL_ERR(("SET INFRA error %d\n", err));
@@ -15384,6 +15383,7 @@ s32 wl_cfg80211_down(void *para)
 	(void)para;
 	WL_DBG(("In\n"));
 	cfg = g_bcm_cfg;
+	wl_cfg80211_clear_mgmt_vndr_ies(cfg);
 	mutex_lock(&cfg->usr_sync);
 	err = __wl_cfg80211_down(cfg);
 	mutex_unlock(&cfg->usr_sync);

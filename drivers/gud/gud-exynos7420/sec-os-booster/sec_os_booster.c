@@ -42,7 +42,7 @@
 #define STB_CPUFREQ	1700000
 #define MIN_CPUFREQ	800000
 
-#define INT_PERFORMANCE	500000
+#define INT_PERFORMANCE	400000
 #define INT_SAVE	0
 
 #define BOOST_POLICY_OFFSET	0
@@ -92,7 +92,6 @@ static void mc_timer_work_func(struct kthread_work *work)
 
 int secos_booster_request_pm_qos(struct pm_qos_request *req, s32 freq)
 {
-	int ret;
 	static ktime_t recent_qos_req_time;
 	ktime_t current_time;
 	unsigned long long ns;
@@ -104,12 +103,6 @@ int secos_booster_request_pm_qos(struct pm_qos_request *req, s32 freq)
 	if (ns > 0 && WAIT_TIME > ns) {
 		pr_info("%s: recalling time is too short. wait %lldms\n", __func__, (WAIT_TIME - ns) / NS_DIV_MS + 1);
 		msleep((WAIT_TIME - ns) / NS_DIV_MS + 1);
-	}
-
-	if (freq != 0 && is_suspend_prepared) {
-		pr_err("%s: PM_SUSPEND_PREPARE state\n", __func__);
-		ret = -EINVAL;
-		return ret;
 	}
 
 	pm_qos_update_request(req, freq);

@@ -287,7 +287,7 @@ int panel_set_brightness(struct dsim_device *dsim, int force)
 	panel->cur_ref_br = panel->mapping_tbl.ref_br_tbl[platform_br];
 	panel->cur_phy_br = panel->mapping_tbl.phy_br_tbl[platform_br];
 
-	bIsHbm = (platform_br == UI_MAX_BRIGHTNESS) && (LEVEL_IS_HBM(panel->auto_brightness));
+	bIsHbm = (platform_br == EXTEND_BRIGHTNESS);
 
 	if(bIsHbm)
 		panel->cur_br_idx = MAX_DIMMING_INFO_COUNT - 1;
@@ -341,8 +341,8 @@ static int set_brightness(struct backlight_device *bd)
 		goto exit_set;
 	}
 
-	if (brightness < UI_MIN_BRIGHTNESS || brightness > UI_MAX_BRIGHTNESS) {
-		printk(KERN_ALERT "Brightness should be in the range of 0 ~ 255\n");
+	if (brightness < UI_MIN_BRIGHTNESS || brightness > EXTEND_BRIGHTNESS) {
+		pr_alert("Brightness %d is out of range\n", brightness);
 		ret = -EINVAL;
 		goto exit_set;
 	}
@@ -380,7 +380,7 @@ int probe_backlight_drv(struct dsim_device *dsim)
 		ret = PTR_ERR(panel->bd);
 	}
 
-	panel->bd->props.max_brightness = UI_MAX_BRIGHTNESS;
+	panel->bd->props.max_brightness = EXTEND_BRIGHTNESS;
 	panel->bd->props.brightness = UI_DEFAULT_BRIGHTNESS;
 
 	panel->cur_acl = OLED_ACL_UNDEFINED;

@@ -202,3 +202,9 @@ config ARM_EXYNOS_BUS_DEVFREQ_SYSFS_MAX_TEMP
 	 This option expose sysfs which show max temperature level
 
 endif # PM_DEVFREQ
+
+config DISABLE_DRAM_PBR
+	bool "use DRAM PBR"
+	default n
+	help
+	  Say Y to use DRAM PBR

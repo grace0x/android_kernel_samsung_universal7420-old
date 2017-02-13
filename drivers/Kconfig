@@ -177,6 +177,8 @@ source "drivers/ipack/Kconfig"
 
 source "drivers/battery/Kconfig"
 
+source "drivers/battery_v2/Kconfig"
+
 source "drivers/reset/Kconfig"
 
 source "drivers/sensorhub/stm/Kconfig"
@@ -184,6 +186,8 @@ source "drivers/sensorhub/stm/Kconfig"
 source "drivers/sensorhub/atmel/Kconfig"
 
 source "drivers/sensorhub/brcm/Kconfig"
+
+source "drivers/sensorhub/stm32/Kconfig"
 
 source "drivers/sensors/Kconfig"
 

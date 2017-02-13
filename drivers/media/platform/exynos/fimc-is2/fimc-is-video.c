@@ -981,7 +981,14 @@ int fimc_is_video_querybuf(struct file *file,
 	int ret = 0;
 	struct fimc_is_queue *queue;
 
+	BUG_ON(!vctx);
+
 	queue = GET_QUEUE(vctx);
+	if (!queue) {
+		merr("queue is NULL", vctx);
+		ret = -EINVAL;
+		return ret;
+	}
 
 	ret = vb2_querybuf(queue->vbq, buf);
 

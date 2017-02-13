@@ -1815,15 +1815,15 @@ static ssize_t max77833_muic_set_afc_disable(struct device *dev,
 	int ret;
 
 	if (!strncasecmp(buf, "1", 1)) {
-		ret = set_param(CM_OFFSET + 1, '1');
+		ret = sec_set_param(CM_OFFSET + 1, '1');
 		if (ret < 0)
-			pr_err("%s:set_param failed\n", __func__);
+			pr_err("%s:sec_set_param failed\n", __func__);
 		else
 			pdata->afc_disable = true;
 	} else if (!strncasecmp(buf, "0", 1)) {
-		ret = set_param(CM_OFFSET + 1, '0');
+		ret = sec_set_param(CM_OFFSET + 1, '0');
 		if (ret < 0)
-			pr_err("%s:set_param failed\n", __func__);
+			pr_err("%s:sec_set_param failed\n", __func__);
 		else
 			pdata->afc_disable = false;
 	} else {
@@ -2105,6 +2105,7 @@ static int max77833_muic_attach_usb_path(struct max77833_muic_data *muic_data,
 	return ret;
 }
 
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN) // For except A8
 #if defined(CONFIG_SEC_FACTORY)
 static muic_attached_dev_t check_jig_uart_on_factory_test
 			(struct max77833_muic_data *muic_data,	muic_attached_dev_t new_dev)
@@ -2122,6 +2123,7 @@ static muic_attached_dev_t check_jig_uart_on_factory_test
 
 	return ret_ndev;
 }
+#endif
 #endif
 
 static int max77833_muic_handle_detach(struct max77833_muic_data *muic_data)
@@ -2298,7 +2300,9 @@ static int max77833_muic_handle_attach(struct max77833_muic_data *muic_data,
 	bool logically_notify = false;
 //	bool noti_smartdock = false;
 	int ret = 0;
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	bool muic_acokb = false;
+#endif
 
 	pr_info("%s:%s \n", MUIC_DEV_NAME, __func__);
 
@@ -2326,11 +2330,15 @@ static int max77833_muic_handle_attach(struct max77833_muic_data *muic_data,
 		ret = max77833_muic_attach_uart_path(muic_data, new_dev);
 		break;
 	case ATTACHED_DEV_JIG_UART_ON_MUIC:
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN) // For except A8
 #if defined(CONFIG_SEC_FACTORY)
 		new_dev = check_jig_uart_on_factory_test(muic_data, new_dev);
 		if (new_dev != ATTACHED_DEV_JIG_UART_ON_MUIC)
 			goto out;
 #else
+		ret = max77833_muic_attach_uart_path(muic_data, new_dev);
+#endif
+#else // For A8
 		ret = max77833_muic_attach_uart_path(muic_data, new_dev);
 #endif
 		break;
@@ -2387,6 +2395,7 @@ static int max77833_muic_handle_attach(struct max77833_muic_data *muic_data,
 		max77833_muic_write_switch(muic_data, COM_OPEN, 0xff);
 		break;
 	case ATTACHED_DEV_TIMEOUT_OPEN_MUIC:	// For chgtyp 0x04
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 		muic_acokb = !gpio_get_value(muic_data->gpio_acokb);
 		pr_info("%s:%s muic_acokb[%d]\n", MUIC_DEV_NAME, __func__, muic_acokb);
 		if (muic_acokb) {
@@ -2397,6 +2406,9 @@ static int max77833_muic_handle_attach(struct max77833_muic_data *muic_data,
 			pr_info("%s:%s: Only Chgtyp 0x04\n", MUIC_DEV_NAME, __func__);
 			goto out_without_noti;
 		}
+#else
+		ret = write_vps_regs(muic_data, new_dev);
+#endif
 		break;
 	case ATTACHED_DEV_WIRELESS_PAD_MUIC:
 		pr_info("%s:%s Wireless PAD ATTACHED\n", MUIC_DEV_NAME, __func__);
@@ -2440,7 +2452,9 @@ static int max77833_muic_handle_attach(struct max77833_muic_data *muic_data,
 	/* chgdet Re-run for timeout or D+/D- open */
 	if ((muic_data->attached_dev == ATTACHED_DEV_NONE_MUIC) &&
 				(new_dev == ATTACHED_DEV_TIMEOUT_OPEN_MUIC)) {
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 		if (muic_acokb)
+#endif
 			max77833_muic_read_chgdet(muic_data);
 	}
 
@@ -2683,6 +2697,7 @@ muic_attached_dev_t max77833_muic_check_new_dev(struct max77833_muic_data *muic_
 	return new_dev;
 }
 
+#if !defined(CONFIG_SEC_FACTORY)
 static bool is_need_muic_idmode_continuous(muic_attached_dev_t new_dev)
 {
 	bool ret = false;
@@ -2702,6 +2717,7 @@ static bool is_need_muic_idmode_continuous(muic_attached_dev_t new_dev)
 
 	return ret;
 }
+#endif
 
 int charger_muic_disable(int val)
 {
@@ -2744,6 +2760,10 @@ static void max77833_muic_detect_dev(struct max77833_muic_data *muic_data, int i
 
 	pr_info("%s:%s adc:0x%x chgdetrun:0x%x chgtyp:0x%x spchgtyp:0x%x sysmsg:0x%x wireless:%d\n",
 		MUIC_DEV_NAME, __func__, adc, chgdetrun, chgtyp, spchgtyp, sysmsg, wcvalue.intval);
+
+#if defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
+	wcvalue.intval = 0;
+#endif
 
 	/* Workaround for 1Mohm wrong detect issue */
 	if (adc == MAX77833_ADC_AUDIOMODE_W_REMOTE) {
@@ -3044,6 +3064,7 @@ do {									\
 	}									\
 })
 
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 static irqreturn_t acokb_detect(int irq, void *data)
 {
 	struct max77833_muic_data *muic_data = data;
@@ -3099,6 +3120,7 @@ static void max77833_muic_irq_acokb_init(struct max77833_muic_data *muic_data)
 	else
 		pr_info("%s: %s: success\n", MUIC_DEV_NAME, __func__);
 }
+#endif
 
 static int max77833_muic_irq_init(struct max77833_muic_data *muic_data)
 {
@@ -3148,7 +3170,9 @@ static void max77833_muic_free_irqs(struct max77833_muic_data *muic_data)
 	FREE_IRQ(muic_data->irq_chgtyp, muic_data, "muic-chgtyp");
 	FREE_IRQ(muic_data->irq_sysmsg, muic_data, "muic-sysmsg");
 	FREE_IRQ(muic_data->irq_apcmdres, muic_data, "muic-apcmdres");
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	FREE_IRQ(muic_data->irq_acokb, muic_data, "muic-acokb");
+#endif
 }
 
 #define CHECK_GPIO(_gpio, _name)					\
@@ -3254,6 +3278,7 @@ err:
 	return ret;
 }
 
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 static int of_max77833_muic_dt_acokb(struct max77833_muic_data *muic_data)
 {
 	struct device_node *np_acokb;
@@ -3287,6 +3312,7 @@ static int of_max77833_muic_dt_acokb(struct max77833_muic_data *muic_data)
 
 	return 0;
 }
+#endif
 #endif /* CONFIG_OF */
 
 static void max77833_muic_clear_interrupt(struct max77833_muic_data *muic_data)
@@ -3343,7 +3369,9 @@ static int max77833_muic_init_regs(struct max77833_muic_data *muic_data)
 		max77833_muic_free_irqs(muic_data);
 	}
 
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	max77833_muic_irq_acokb_init(muic_data);
+#endif
 
 	return ret;
 }
@@ -3443,10 +3471,12 @@ static int max77833_muic_probe(struct platform_device *pdev)
 		pr_err("%s:%s not found muic dt! ret[%d]\n", MUIC_DEV_NAME, __func__, ret);
 	}
 
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	ret = of_max77833_muic_dt_acokb(muic_data);
 	if (ret < 0) {
 		pr_err("%s:%s not found muic_acokb dt! ret[%d]\n", MUIC_DEV_NAME, __func__, ret);
 	}
+#endif
 #endif /* CONFIG_OF */
 
 	muic_data->dev = &pdev->dev;
@@ -3612,26 +3642,28 @@ out:
 #if defined(CONFIG_PM)
 static int max77833_muic_suspend(struct device *dev)
 {
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	struct max77833_muic_data *muic_data = dev_get_drvdata(dev);
-
-	pr_info("%s:%s\n", MUIC_DEV_NAME, __func__);
 
 	if (device_may_wakeup(dev)) {
 		enable_irq_wake(muic_data->irq_acokb);
 	}
+#endif
+	pr_info("%s:%s\n", MUIC_DEV_NAME, __func__);
 
 	return 0;
 }
 
 static int max77833_muic_resume(struct device *dev)
 {
+#if !defined(CONFIG_MUIC_MAX77833_NOT_SUPPORT_WCIN)
 	struct max77833_muic_data *muic_data = dev_get_drvdata(dev);
-
-	pr_info("%s:%s\n", MUIC_DEV_NAME, __func__);
 
 	if (device_may_wakeup(dev)) {
 		disable_irq_wake(muic_data->irq_acokb);
 	}
+#endif
+	pr_info("%s:%s\n", MUIC_DEV_NAME, __func__);
 
 	return 0;
 }

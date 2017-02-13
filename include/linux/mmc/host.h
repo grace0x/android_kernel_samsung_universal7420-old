@@ -302,6 +302,8 @@ struct mmc_host {
 #define MMC_CAP2_STROBE_ENHANCED	(1 << 17)	/* enhanced strobe */
 #define MMC_CAP2_CMDQ		(MMC_CAP2_CACHE_CTRL | \
 				(1 << 18))	/* Allow command queuing */
+#define MMC_CAP2_SKIP_INIT_SCAN	(1 << 19)	/* skip init mmc scan */
+#define MMC_CAP2_CONTROL_VCCQ		(1<<31) /* One GPIO control vcc and vccq*/
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 

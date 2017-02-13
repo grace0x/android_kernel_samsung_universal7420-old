@@ -30,8 +30,13 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../../drivers/battery_v2/include/charger/max77833_charger.h"
+#include "../../../drivers/battery_v2/include/fuelgauge/max77833_fuelgauge.h"
+#else
 #include <linux/battery/charger/max77833_charger.h>
 #include <linux/battery/fuelgauge/max77833_fuelgauge.h>
+#endif
 
 #define MFD_DEV_NAME "max77833"
 #define M2SH(m) ((m) & 0x0F ? ((m) & 0x03 ? ((m) & 0x01 ? 0 : 1) : ((m) & 0x04 ? 2 : 3)) : \
@@ -81,9 +86,11 @@ struct max77833_platform_data {
 	bool wakeup;
 	struct muic_platform_data *muic_pdata;
 
+#if !defined(CONFIG_BATTERY_SAMSUNG_V2)
 #if defined(CONFIG_CHARGER_MAX77833) || defined(CONFIG_FUELGAUGE_MAX77833)
 	sec_charger_platform_data_t *charger_data;
 	sec_fuelgauge_platform_data_t *fuelgauge_data;
+#endif
 #endif
 
 	int num_regulators;

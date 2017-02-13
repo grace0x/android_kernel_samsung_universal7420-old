@@ -60,7 +60,9 @@ static struct fimc_is_cam_info cam_infos[2];
 #endif
 
 extern bool force_caldata_dump;
+#ifdef CONFIG_OIS_USE
 static bool check_ois_power = false;
+#endif
 static bool check_module_init = false;
 
 #ifdef CAMERA_SYSFS_V2
@@ -740,7 +742,8 @@ static ssize_t camera_rear_checkfw_factory_show(struct device *dev,
 			} else {
 #ifdef CONFIG_OIS_USE
 				if (ois_minfo->checksum != 0x00 || ois_minfo->caldata != 0x00 || !ois_ret) {
-					err(" NG, OIS crc check fail");
+					err(" NG, OIS crc check fail, checksum = 0x%02x, caldata = 0x%02x, ois_ret = %d",
+						ois_minfo->checksum, ois_minfo->caldata, ois_ret);
 #ifdef CAMERA_SYSFS_V2
 					strcpy(command_ack, "NG_CRC\n");
 #else
@@ -1050,6 +1053,17 @@ static ssize_t camera_isp_core_show(struct device *dev,
 }
 #endif
 
+static ssize_t camera_hw_init_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	if (!check_module_init) {
+		fimc_is_sec_hw_init(sysfs_core);
+		check_module_init = true;
+	}
+
+	return sprintf(buf, "%s\n", "HW init done.");
+}
+
 #ifdef CONFIG_OIS_USE
 static ssize_t camera_ois_power_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
@@ -1195,17 +1209,6 @@ static ssize_t camera_ois_diff_show(struct device *dev,
 	}
 }
 
-static ssize_t camera_hw_init_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	if (!check_module_init) {
-		fimc_is_sec_hw_init(sysfs_core);
-		check_module_init = true;
-	}
-
-	return sprintf(buf, "%s\n", "HW init done.");
-}
-
 static ssize_t camera_ois_exif_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1223,6 +1226,26 @@ static ssize_t camera_ois_exif_show(struct device *dev,
 		ois_uinfo->header_ver, ois_exif->error_data, ois_exif->status_data);
 }
 #endif
+
+static ssize_t camera_rear_afcal_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	read_from_firmware_version(SENSOR_POSITION_REAR);
+
+	return sprintf(buf, "1 %d %d\n", finfo->af_cal_macro, finfo->af_cal_pan);
+}
+
+static ssize_t camera_rear_moduleid_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	read_from_firmware_version(SENSOR_POSITION_REAR);
+
+	return sprintf(buf, "%c%c%c%c%c%02X%02X%02X%02X%02X\n",
+		finfo->from_module_id[0], finfo->from_module_id[1], finfo->from_module_id[2],
+		finfo->from_module_id[3], finfo->from_module_id[4], finfo->from_module_id[5],
+		finfo->from_module_id[6], finfo->from_module_id[7], finfo->from_module_id[8],
+		finfo->from_module_id[9]);
+}
 
 #ifdef CAMERA_MODULE_DUALIZE
 static DEVICE_ATTR(from_write, S_IRUGO,
@@ -1272,6 +1295,10 @@ static DEVICE_ATTR(ois_diff, S_IRUGO,
 static DEVICE_ATTR(ois_exif, S_IRUGO,
 		camera_ois_exif_show, NULL);
 #endif
+static DEVICE_ATTR(rear_afcal, S_IRUGO,
+		camera_rear_afcal_show, NULL);
+static DEVICE_ATTR(rear_moduleid, S_IRUGO,
+		camera_rear_moduleid_show, NULL);
 
 #ifdef FORCE_CAL_LOAD
 static ssize_t camera_rear_force_cal_load_show(struct device *dev,
@@ -1420,6 +1447,14 @@ int fimc_is_create_sysfs(struct fimc_is_core *core)
 					dev_attr_rear_force_cal_load.attr.name);
 		}
 #endif
+		if (device_create_file(camera_rear_dev, &dev_attr_rear_afcal) < 0) {
+			printk(KERN_ERR "failed to create rear device file, %s\n",
+					dev_attr_rear_afcal.attr.name);
+		}
+		if (device_create_file(camera_rear_dev, &dev_attr_rear_moduleid) < 0) {
+			printk(KERN_ERR "failed to create rear device file, %s\n",
+					dev_attr_rear_moduleid.attr.name);
+		}
 	}
 
 #ifdef CONFIG_OIS_USE
@@ -1500,6 +1535,8 @@ int fimc_is_destroy_sysfs(struct fimc_is_core *core)
 		device_remove_file(camera_rear_dev, &dev_attr_rear_force_cal_load);
 #endif
 		device_remove_file(camera_rear_dev, &dev_attr_fw_update);
+		device_remove_file(camera_rear_dev, &dev_attr_rear_afcal);
+		device_remove_file(camera_rear_dev, &dev_attr_rear_moduleid);
 	}
 
 #ifdef CONFIG_OIS_USE

@@ -1001,6 +1001,7 @@ dhd_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	switch (action)
 	{
 		case CPU_ONLINE:
+		case CPU_ONLINE_FROZEN:
 			DHD_LB_STATS_INCR(dhd->cpu_online_cnt[cpu]);
 			cpumask_set_cpu(cpu, dhd->cpumask_curr_avail);
 			dhd_select_cpu_candidacy(dhd);

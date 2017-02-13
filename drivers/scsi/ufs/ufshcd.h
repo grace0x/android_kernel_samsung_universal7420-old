@@ -297,6 +297,7 @@ struct ufs_hba_variant_ops {
 					int, struct scsi_cmnd *);
 	void	(*set_nexus_t_task_mgmt)(struct ufs_hba *, int, u8);
 	void	(*hibern8_notify)(struct ufs_hba *, u8, bool);
+	void	(*get_debug_info)(struct ufs_hba *);
 	int     (*suspend)(struct ufs_hba *, enum ufs_pm_op);
 	int     (*resume)(struct ufs_hba *, enum ufs_pm_op);
 };
@@ -524,6 +525,7 @@ struct ufs_hba {
 #define UFSHCI_QUIRK_BROKEN_REQ_LIST_CLR	BIT(1)
 #define UFSHCI_QUIRK_USE_OF_HCE			BIT(2)
 #define UFSHCI_QUIRK_SKIP_INTR_AGGR		BIT(3)
+#define UFSHCI_QUIRK_USE_ABORT_TASK		BIT(4)
 
 	/* Device deviations from standard UFS device spec. */
 	unsigned int dev_quirks;
@@ -663,6 +665,10 @@ void ufshcd_release(struct ufs_hba *hba);
 
 int ufshcd_read_device_desc(struct ufs_hba *hba, u8 *buf, u32 size);
 int ufshcd_read_health_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+#ifdef CONFIG_JOURNAL_DATA_TAG
+int ufshcd_read_vendor_specific_desc(struct ufs_hba *hba, enum desc_idn desc_id,
+		int desc_index, u8 *buf, u32 size);
+#endif
 
 #define ASCII_STD true
 #define UTF16_STD false

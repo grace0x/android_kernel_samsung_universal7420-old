@@ -290,6 +290,7 @@ ssize_t s2mpb02_store(struct device *dev,
 			size_t count)
 {
 	int value = 0;
+	int brightness_value = 0;
 
 	if ((buf == NULL) || kstrtouint(buf, 10, &value)) {
 		return -1;
@@ -317,7 +318,17 @@ ssize_t s2mpb02_store(struct device *dev,
 		led_set(global_led_datas[S2MPB02_TORCH_LED_1]);
 	} else if (1001 <= value && value <= 1010) {
 		/* Turn on Torch Step 20mA ~ 200mA */
-		global_led_datas[S2MPB02_TORCH_LED_1]->data->brightness = value - 1000;
+		brightness_value = value - 1000;
+
+		if (global_led_datas[S2MPB02_TORCH_LED_1]->data->torch_table_enable == 1) {
+			int new_brightness_value = global_led_datas[S2MPB02_TORCH_LED_1]->data->torch_table[brightness_value-1];
+			if ( (new_brightness_value >= S2MPB02_TORCH_OUT_I_20MA)
+				&& (new_brightness_value < S2MPB02_TORCH_OUT_I_MAX ) ) {
+				brightness_value = new_brightness_value;
+			}
+		}
+		pr_info("[LED]%s , brightness_value(%d)\n", __func__, brightness_value);
+		global_led_datas[S2MPB02_TORCH_LED_1]->data->brightness = brightness_value;
 		led_set(global_led_datas[S2MPB02_TORCH_LED_1]);
 	} else {
 		pr_info("[LED]%s , Invalid value:%d\n", __func__, value);
@@ -355,7 +366,7 @@ ssize_t s2mpb02_show(struct device *dev,
 static DEVICE_ATTR(rear_flash, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH,
 	s2mpb02_show, s2mpb02_store);
 
-static DEVICE_ATTR(torch_flash, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH,
+static DEVICE_ATTR(rear_torch_flash, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH,
 	s2mpb02_show, s2mpb02_store);
 
 #if defined(CONFIG_OF)
@@ -368,6 +379,7 @@ static int of_s2mpb02_torch_dt(struct s2mpb02_dev *iodev,
 	u32 irda_off=0;
 	const char *temp_str;
 	int index;
+	u32 torch_table_enable = 0;
 
 	led_np = iodev->dev->of_node;
 	if (!led_np) {
@@ -421,6 +433,17 @@ static int of_s2mpb02_torch_dt(struct s2mpb02_dev *iodev,
 				pr_info("%s failed to get a irda_off\n", __func__);
 			}
 			pdata->leds[index].irda_off = irda_off;
+		}
+
+		ret = of_property_read_u32(c_np, "torch_table_enable", &torch_table_enable);
+		if (ret) {
+			pr_info("%s failed to get a torch_table_enable\n", __func__);
+		}
+		if (torch_table_enable == 1) {
+			pdata->leds[index].torch_table_enable = torch_table_enable;
+			ret = of_property_read_u32_array(c_np, "torch_table", pdata->leds[index].torch_table, TORCH_STEP);
+		} else {
+			pdata->leds[index].torch_table_enable = 0;
 		}
 	}
 	of_node_put(led_np);
@@ -565,9 +588,9 @@ static int s2mpb02_led_probe(struct platform_device *pdev)
 		}
 
 		if (device_create_file(s2mpb02_led_dev,
-					 &dev_attr_torch_flash) < 0) {
+					 &dev_attr_rear_torch_flash) < 0) {
 			pr_err("<%s> failed to create device file, %s\n",
-				__func__ , dev_attr_torch_flash.attr.name);
+				__func__ , dev_attr_rear_torch_flash.attr.name);
 		}
 	}
 
@@ -597,7 +620,7 @@ static int s2mpb02_led_remove(struct platform_device *pdev)
 
 	if(s2mpb02_led_dev) {
 		device_remove_file(s2mpb02_led_dev, &dev_attr_rear_flash);
-		device_remove_file(s2mpb02_led_dev, &dev_attr_torch_flash);
+		device_remove_file(s2mpb02_led_dev, &dev_attr_rear_torch_flash);
 	}
 
 	if (camera_class && s2mpb02_led_dev) {

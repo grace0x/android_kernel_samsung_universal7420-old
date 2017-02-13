@@ -1274,6 +1274,43 @@ static int wm_adsp_parse_coeff(struct wm_adsp *dsp,
 	return 0;
 }
 
+static int wm_adsp_write_blocks(struct wm_adsp *dsp, const u8 *data, size_t len,
+				unsigned reg, struct list_head *list)
+
+{
+	size_t to_write = PAGE_SIZE;
+	size_t remain = len;
+	struct wm_adsp_buf *buf;
+	int ret;
+
+	while (remain > 0) {
+		if (remain < PAGE_SIZE)
+			to_write = remain;
+
+		buf = wm_adsp_buf_alloc(data, to_write, list);
+		if (!buf) {
+			adsp_err(dsp, "Out of memory\n");
+			return -ENOMEM;
+		}
+
+		ret = regmap_raw_write_async(dsp->regmap, reg,
+					     buf->buf, to_write);
+		if (ret != 0) {
+			adsp_err(dsp,
+				 "Failed to write %zd bytes at %d\n",
+				 to_write, reg);
+
+			return ret;
+		}
+
+		data += to_write;
+		reg += to_write / 2;
+		remain -= to_write;
+	}
+
+	return 0;
+}
+
 static int wm_adsp_load(struct wm_adsp *dsp)
 {
 	LIST_HEAD(buf_list);
@@ -1288,7 +1325,6 @@ static int wm_adsp_load(struct wm_adsp *dsp)
 	const struct wm_adsp_region *mem;
 	const char *region_name;
 	char *file, *text;
-	struct wm_adsp_buf *buf;
 	unsigned int reg;
 	int regions = 0;
 	int ret, offset, type, sizes;
@@ -1473,38 +1509,15 @@ static int wm_adsp_load(struct wm_adsp *dsp)
 		}
 
 		if (reg) {
-			size_t to_write = PAGE_SIZE;
-			size_t remain = le32_to_cpu(region->len);
-			const u8 *data = region->data;
-
-			while (remain > 0) {
-				if (remain < PAGE_SIZE)
-					to_write = remain;
-
-				buf = wm_adsp_buf_alloc(data,
-							to_write,
-							&buf_list);
-				if (!buf) {
-					adsp_err(dsp, "Out of memory\n");
-					ret = -ENOMEM;
-					goto out_buf;
-				}
-
-				ret = regmap_raw_write_async(regmap, reg,
-							     buf->buf,
-							     to_write);
-				if (ret != 0) {
-					adsp_err(dsp,
-						"%s.%d: Failed to write %zd bytes at %d in %s: %d\n",
-						file, regions,
-						to_write, offset,
-						region_name, ret);
-					goto out_buf;
-				}
-
-				data += to_write;
-				reg += to_write / 2;
-				remain -= to_write;
+			ret = wm_adsp_write_blocks(dsp, region->data,
+						   le32_to_cpu(region->len),
+						   reg, &buf_list);
+			if (ret != 0) {
+				adsp_err(dsp,
+					"%s.%d: Failed writing data at %d in %s: %d\n",
+					file, regions,
+					offset, region_name, ret);
+				goto out_buf;
 			}
 		}
 
@@ -1862,7 +1875,6 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 	int ret = 0;
 	int err, pos, blocks, type, offset, reg;
 	char *file;
-	struct wm_adsp_buf *buf;
 
 	if (dsp->firmwares[dsp->fw].binfile &&
 	    !(strcmp(dsp->firmwares[dsp->fw].binfile, "None")))
@@ -2001,20 +2013,10 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 		}
 
 		if (reg) {
-			buf = wm_adsp_buf_alloc(blk->data,
-						le32_to_cpu(blk->len),
-						&buf_list);
-			if (!buf) {
-				adsp_err(dsp, "Out of memory\n");
-				ret = -ENOMEM;
-				goto out_async;
-			}
+			ret = wm_adsp_write_blocks(dsp, blk->data,
+						   le32_to_cpu(blk->len),
+						   reg, &buf_list);
 
-			adsp_dbg(dsp, "%s.%d: Writing %d bytes at %x\n",
-				 file, blocks, le32_to_cpu(blk->len),
-				 reg);
-			ret = regmap_raw_write_async(regmap, reg, buf->buf,
-						     le32_to_cpu(blk->len));
 			if (ret != 0) {
 				adsp_err(dsp,
 					"%s.%d: Failed to write to %x in %s: %d\n",
@@ -2031,8 +2033,6 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 			  file, blocks, pos - firmware->size);
 
 	wm_adsp_debugfs_save_binname(dsp, file);
-
-out_async:
 	err = regmap_async_complete(regmap);
 	if (err != 0) {
 		adsp_err(dsp, "Failed to complete async write: %d\n", err);

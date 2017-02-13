@@ -252,6 +252,11 @@ void samsung_exynos5_cal_usb3phy_tune_dev(void __iomem *regs_base)
 		phyparam0 |= PHYPARAM0_TXPREEMPAMPTUNE(0x3);
 		phyparam0 &= ~PHYPARAM0_TXVREFTUNE_MASK;
 		phyparam0 |= PHYPARAM0_TXVREFTUNE(0xe);
+		/* Set the default value because the following registers is changed after OTG connection.*/
+		phyparam0 &= ~PHYPARAM0_COMPDISTUNE_MASK;
+		phyparam0 |= PHYPARAM0_COMPDISTUNE(0x4);
+		phyparam0 &= ~PHYPARAM0_SQRXTUNE_MASK;
+		phyparam0 |= PHYPARAM0_SQRXTUNE(0x6);
 		writel(phyparam0, regs_base + EXYNOS5_DRD_PHYPARAM0);
 	} else {
 		if(!of_property_read_u32(np_usb3phy, "dwc3,usb3phy-tune", &phyparam0)){

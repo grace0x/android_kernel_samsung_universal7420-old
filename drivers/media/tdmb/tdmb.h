@@ -43,6 +43,14 @@
 #define TDMB_RING_BUFFER_MAPPING_SIZE	\
 		(((TDMB_RING_BUFFER_SIZE - 1) / PAGE_SIZE + 1) * PAGE_SIZE)
 
+#define TDMB_FCI_PTCHECK
+#ifdef TDMB_FCI_PTCHECK
+struct ioctl_info {
+	__u32 size;
+	__u32 buff[128];
+};
+#endif
+
 /* commands */
 #define IOCTL_MAGIC	't'
 #define IOCTL_MAXNR	32
@@ -59,6 +67,14 @@
 #define IOCTL_TDMB_ASSIGN_CH_TEST	_IO(IOCTL_MAGIC, 9)
 #define IOCTL_TDMB_SET_AUTOSTART	_IO(IOCTL_MAGIC, 10)
 
+#ifdef TDMB_FCI_PTCHECK
+#define IOCTL_TDMB_TS_START		_IO(IOCTL_MAGIC, 18)
+#define IOCTL_TDMB_TS_STOP		_IO(IOCTL_MAGIC, 19)
+#define IOCTL_TDMB_BYTE_WRITE	_IOW(IOCTL_MAGIC, 28, struct ioctl_info)
+#define IOCTL_TDMB_BYTE_READ	_IOWR(IOCTL_MAGIC, 29, struct ioctl_info)
+#define IOCTL_TDMB_WORD_WRITE	_IOW(IOCTL_MAGIC, 30, struct ioctl_info)
+#define IOCTL_TDMB_WORD_READ	_IOWR(IOCTL_MAGIC, 31, struct ioctl_info)
+#endif
 
 struct tdmb_dm {
 	unsigned int	rssi;
@@ -97,6 +113,13 @@ struct sub_ch_info_type {
 	unsigned char svc_label[SVC_LABEL_MAX+1]; /* 16*8 bits */
 	unsigned char ecc;	/* 8 bits */
 	unsigned char scids;	/* 4 bits */
+
+	unsigned char ca_flags;
+#if 0//for future use of HD-DMB
+	/* FIG 6 */
+	unsigned short ca_sys_id;
+	unsigned char ca_int_char[24];
+#endif
 } ;
 
 struct ensemble_info_type {
@@ -190,6 +213,11 @@ struct tdmb_drv_func {
 						bool factory_test);
 	void (*pull_data) (void);
 	unsigned long (*get_int_size) (void);
+	
+	int (*byte_write)(u16 addr, u8 data);
+	int (*byte_read)(u16 addr, u8* data);
+	int (*word_write)(u16 addr, u16 data);
+	int (*word_read)(u16 addr, u16* data);
 };
 
 extern unsigned int *tdmb_ts_head;

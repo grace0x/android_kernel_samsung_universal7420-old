@@ -37,6 +37,8 @@
 #define MAX_USER_APPL_NUM       15
 #define MAX_USER_APPL_DATA_SIZE 24
 
+#define MAX_CAINT_CHAR			24
+
 struct fig {
 	u8 	head;
 	u8	data[29];
@@ -74,8 +76,11 @@ struct service_info_t {
 	u8	addrType;		/* PD */
 	u8	tmid;
 	u8	sub_channel_id;
+	u8	ca_flag;
 	u8	nscps;
 	u8	label[32];
+	u16 ca_sys_id;
+	u8 ca_int_char[24];
 
 	u8  scids;
 	u8  num_of_user_appl;

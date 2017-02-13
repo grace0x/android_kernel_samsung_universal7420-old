@@ -314,6 +314,7 @@ enum flash_mode {
 
     /* vendor feature */
     CAM2_FLASH_MODE_BEST = 100,
+    CAM2_FLASH_MODE_LCD = 101,
 };
 
 enum flash_state {
@@ -625,6 +626,9 @@ enum stats_lowlightmode {
     STATE_LLS_LEVEL_ZSL_LIKE1 = 7,
     STATE_LLS_LEVEL_SHARPEN_SINGLE = 8,
     STATE_LLS_MANUAL_ISO = 9,
+    STATE_LLS_LEVEL_SHARPEN_DR = 10,
+    STATE_LLS_LEVEL_SHARPEN_IMA = 11,
+    STATE_LLS_LEVEL_STK = 12,
     STATE_LLS_LEVEL_FLASH = 16,
     STATE_LLS_LEVEL_MULTI_MERGE_2 = 18,
     STATE_LLS_LEVEL_MULTI_MERGE_3 = 19,

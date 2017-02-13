@@ -56,6 +56,9 @@ ssize_t mst_ctrl_write(struct file *file, const char __user *buffer, size_t size
 	char *string;
 	int nfc_status;
 
+	if (size == 0)
+		return 0;
+
 	printk(KERN_ERR " %s\n", __FUNCTION__);
 
 	string = kmalloc(size + sizeof(char), GFP_KERNEL);

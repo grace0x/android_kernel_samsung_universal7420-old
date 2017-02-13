@@ -338,13 +338,14 @@ void lpass_reset(int ip, int op)
 {
 	u32 reg, val, bit;
 	void __iomem *regs;
+	unsigned long flags;
 
 	if (is_old_ass()) {
 		ass_reset(ip, op);
 		return;
 	}
 
-	spin_lock(&lpass.lock);
+	spin_lock_irqsave(&lpass.lock, flags);
 	regs = lpass.regs;
 	reg = LPASS_CORE_SW_RESET;
 	switch (ip) {
@@ -380,7 +381,7 @@ void lpass_reset(int ip, int op)
 		}
 		break;
 	default:
-		spin_unlock(&lpass.lock);
+		spin_unlock_irqrestore(&lpass.lock, flags);
 		pr_err("%s: wrong ip type %d!\n", __func__, ip);
 		return;
 	}
@@ -394,13 +395,13 @@ void lpass_reset(int ip, int op)
 		val |= bit;
 		break;
 	default:
-		spin_unlock(&lpass.lock);
+		spin_unlock_irqrestore(&lpass.lock, flags);
 		pr_err("%s: wrong op type %d!\n", __func__, op);
 		return;
 	}
 
 	writel(val, regs + reg);
-	spin_unlock(&lpass.lock);
+	spin_unlock_irqrestore(&lpass.lock, flags);
 }
 
 void lpass_reset_toggle(int ip)

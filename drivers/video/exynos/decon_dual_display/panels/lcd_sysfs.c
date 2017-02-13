@@ -16,6 +16,9 @@
 #include "dsim_panel.h"
 #include "panel_info.h"
 #include "oled_backlight.h"
+#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
+#include "mdnie.h"
+#endif
 
 #if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_EXYNOS_DECON_LCD_MCD)
 void mcd_mode_set(struct dsim_device *dsim)
@@ -428,46 +431,11 @@ static ssize_t brightness_table_show(struct device *dev,
 
 	char *pos = buf;
 	int nit, i;
-	for (i = 0; i <= UI_MAX_BRIGHTNESS; i++) {
+	for (i = 0; i <= EXTEND_BRIGHTNESS; i++) {
 		nit = panel->br_tbl[i];
 		pos += sprintf(pos, "%3d %3d\n", i, nit);
 	}
 	return pos - buf;
-}
-
-static ssize_t auto_brightness_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct panel_private *priv = dev_get_drvdata(dev);
-
-	sprintf(buf, "%u\n", priv->auto_brightness);
-
-	return strlen(buf);
-}
-
-static ssize_t auto_brightness_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t size)
-{
-	struct dsim_device *dsim;
-	struct panel_private *priv = dev_get_drvdata(dev);
-	int value;
-	int rc;
-
-	dsim = container_of(priv, struct dsim_device, priv);
-
-	rc = kstrtouint(buf, (unsigned int)0, &value);
-	if (rc < 0)
-		return rc;
-	else {
-		if (priv->auto_brightness != value) {
-			dev_info(dev, "%s: %d, %d\n", __func__, priv->auto_brightness, value);
-			mutex_lock(&priv->lock);
-			priv->auto_brightness = value;
-			mutex_unlock(&priv->lock);
-			panel_set_brightness(dsim, 0);
-		}
-	}
-	return size;
 }
 
 static ssize_t siop_enable_show(struct device *dev,
@@ -714,17 +682,17 @@ static ssize_t manufacture_code_show(struct device *dev,
 	return strlen(buf);
 }
 
-static ssize_t weakness_hbm_show(struct device *dev,
+static ssize_t adaptive_control_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct panel_private *priv = dev_get_drvdata(dev);
 
-	sprintf(buf, "%d\n", priv->weakness_hbm_comp);
+	sprintf(buf, "%d\n", priv->adaptive_control);
 
 	return strlen(buf);
 }
 
-static ssize_t weakness_hbm_store(struct device *dev,
+static ssize_t adaptive_control_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
 {
 	int rc;
@@ -738,19 +706,56 @@ static ssize_t weakness_hbm_store(struct device *dev,
 	if (rc < 0)
 		return rc;
 	else {
-		if (priv->weakness_hbm_comp != value) {
-			dev_info(dev, "%s: %d, %d\n", __func__, priv->weakness_hbm_comp, value);
-			priv->weakness_hbm_comp = value;
+		if (priv->adaptive_control != value) {
+			dev_info(dev, "%s: %d, %d\n", __func__, priv->adaptive_control, value);
+			mutex_lock(&priv->lock);
+			priv->adaptive_control = value;
+			mutex_unlock(&priv->lock);
 			panel_set_brightness(dsim, 0);
 		}
 	}
 	return size;
 }
+
+#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
+static ssize_t lux_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct panel_private *priv = dev_get_drvdata(dev);
+
+	sprintf(buf, "%d\n", priv->lux);
+
+	return strlen(buf);
+}
+
+static ssize_t lux_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct panel_private *priv = dev_get_drvdata(dev);
+	int value;
+	int rc;
+
+	rc = kstrtoint(buf, 0, &value);
+
+	if (rc < 0)
+		return rc;
+
+	if (priv->lux != value) {
+		mutex_lock(&priv->lock);
+		priv->lux = value;
+		mutex_unlock(&priv->lock);
+
+		attr_store_for_each(priv->mdnie_class, attr->attr.name, buf, size);
+	}
+
+	return size;
+}
+#endif
+
 static DEVICE_ATTR(lcd_type, 0444, lcd_type_show, NULL);
 static DEVICE_ATTR(window_type, 0444, window_type_show, NULL);
 static DEVICE_ATTR(manufacture_code, 0444, manufacture_code_show, NULL);
 static DEVICE_ATTR(brightness_table, 0444, brightness_table_show, NULL);
-static DEVICE_ATTR(auto_brightness, 0644, auto_brightness_show, auto_brightness_store);
 static DEVICE_ATTR(siop_enable, 0664, siop_enable_show, siop_enable_store);
 static DEVICE_ATTR(temperature, 0664, temperature_show, temperature_store);
 static DEVICE_ATTR(color_coordinate, 0444, color_coordinate_show, NULL);
@@ -759,8 +764,10 @@ static DEVICE_ATTR(read_mtp, 0664, read_mtp_show, read_mtp_store);
 #ifdef CONFIG_PANEL_AID_DIMMING_OLD
 static DEVICE_ATTR(aid_log, 0444, aid_log_show, NULL);
 #endif
-static DEVICE_ATTR(weakness_hbm_comp, 0664, weakness_hbm_show, weakness_hbm_store);
-
+static DEVICE_ATTR(adaptive_control, 0664, adaptive_control_show, adaptive_control_store);
+#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
+static DEVICE_ATTR(lux, 0644, lux_show, lux_store);
+#endif
 
 void lcd_init_sysfs(struct dsim_device *dsim)
 {
@@ -781,10 +788,6 @@ void lcd_init_sysfs(struct dsim_device *dsim)
 	ret = device_create_file(&dsim->lcd->dev, &dev_attr_brightness_table);
 	if (ret < 0)
 		dev_err(&dsim->lcd->dev, "failed to add sysfs entries, %d\n", __LINE__);
-
-	ret = device_create_file(&dsim->priv.bd->dev, &dev_attr_auto_brightness);
-	if (ret < 0)
-		dev_err(&dsim->priv.bd->dev, "failed to add sysfs entries, %d\n", __LINE__);
 
 	ret = device_create_file(&dsim->lcd->dev, &dev_attr_siop_enable);
 	if (ret < 0)
@@ -833,9 +836,15 @@ void lcd_init_sysfs(struct dsim_device *dsim)
 	if (ret < 0)
 		dev_err(&dsim->lcd->dev, "failed to add sysfs entries, %d\n", __LINE__);
 #endif
-	ret = device_create_file(&dsim->priv.bd->dev ,&dev_attr_weakness_hbm_comp);
+	ret = device_create_file(&dsim->lcd->dev, &dev_attr_adaptive_control);
 	if (ret < 0)
 		dev_err(&dsim->lcd->dev, "failed to add sysfs entries, %d\n", __LINE__);
+
+#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
+	ret = device_create_file(&dsim->lcd->dev, &dev_attr_lux);
+	if (ret < 0)
+		dev_err(&dsim->lcd->dev, "failed to add sysfs entries, %d\n", __LINE__);
+#endif
 }
 
 

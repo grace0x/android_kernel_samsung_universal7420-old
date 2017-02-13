@@ -103,7 +103,6 @@ enum FIMC_IS_DVFS_QOS_TYPE {
 	FIMC_IS_DVFS_I2C,
 	FIMC_IS_DVFS_CAM,
 	FIMC_IS_DVFS_DISP,
-	FIMC_IS_DVFS_PWM,
 	FIMC_IS_DVFS_END,
 };
 
@@ -113,7 +112,6 @@ enum FIMC_IS_DVFS_QOS_TYPE {
 	(t)[s][FIMC_IS_DVFS_I2C]	= _i;	\
 	(t)[s][FIMC_IS_DVFS_CAM]	= c;	\
 	(t)[s][FIMC_IS_DVFS_DISP]	= d;	\
-	(t)[s][FIMC_IS_DVFS_PWM]	= p;	\
 	(t)[s][FIMC_IS_DVFS_CPU_MIN]	= cmin;	\
 	(t)[s][FIMC_IS_DVFS_CPU_MAX]	= cmax;
 
@@ -123,7 +121,6 @@ enum FIMC_IS_DVFS_QOS_TYPE {
 	(t)[s][FIMC_IS_DVFS_I2C]	= _i;	\
 	(t)[s][FIMC_IS_DVFS_CAM]	= c;	\
 	(t)[s][FIMC_IS_DVFS_DISP]	= d;	\
-	(t)[s][FIMC_IS_DVFS_PWM]	= p;	\
 	(t)[s][FIMC_IS_DVFS_CPU_MIN]	= 0;	\
 	(t)[s][FIMC_IS_DVFS_CPU_MAX]	= 0;
 

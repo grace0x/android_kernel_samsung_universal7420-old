@@ -24,8 +24,13 @@
 
 #include <linux/i2c.h>
 
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../../drivers/battery_v2/include/charger/max77833_charger.h"
+#include "../../../drivers/battery_v2/include/fuelgauge/max77833_fuelgauge.h"
+#else
 #include <linux/battery/charger/max77833_charger.h>
 #include <linux/battery/fuelgauge/max77833_fuelgauge.h>
+#endif
 
 #define MAX77833_I2C_ADDR		(0x92)
 #define MAX77833_REG_INVALID		(0xff)
@@ -137,6 +142,7 @@ enum max77833_fuelgauge_reg {
 	ICHGTERM_REG                                 = 0x003C,
 	REMCAP_AV_REG                                = 0x003E,
 	FULLCAP_NOM_REG                              = 0x0046,
+	FILTER_CFG_REG                               = 0x0052,
 	MISCCFG_REG                                  = 0x0056,
 	QRTABLE20_REG                                = 0x0064,
 	FULLCAPREP_REG                               = 0x006A,

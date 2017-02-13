@@ -12,6 +12,7 @@
 #ifndef _MPHY_H_
 #define _MPHY_H_
 
+#define TX_HIBERN8TIME_CAP		0x0f
 #define TX_MIN_ACTIVATE_TIME		0x33
 
 #define RX_HS_G1_SYNC_LENGTH_CAP	0x8b
@@ -26,6 +27,8 @@
  #define PREP_LEN(x)		((x) & 0xf)
 #define RX_ADV_GRANULARITY_CAP		0x98
  #define RX_ADV_FINE_GRAN_STEP(x)	((((x) & 0x3) << 1) | 0x1)
+#define TX_ADV_GRANULARITY_CAP		0x10
+ #define TX_ADV_FINE_GRAN_STEP(x)       ((((x) & 0x3) << 1) | 0x1)
 #define RX_MIN_ACTIVATETIME_CAP		0x8f
 #define RX_HIBERN8TIME_CAP		0x92
 #define RX_ADV_HIBERN8TIME_CAP		0x99

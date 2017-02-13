@@ -12,4 +12,5 @@ obj-$(CONFIG_MOTOR_DRV_ISA1200)		+= isa1200_vibrator.o
 obj-$(CONFIG_MOTOR_DRV_ISA1400)		+= isa1400_vibrator.o
 obj-$(CONFIG_HAPTIC_ISA1200)			+= haptic_isa1200.o
 obj-$(CONFIG_HAPTIC_ISA1400)			+= haptic_isa1400.o
-
+obj-$(CONFIG_DC_MOTOR)			+= dc_motor.o
+obj-$(CONFIG_SEC_VIB)	+= sec_vib.o

@@ -108,12 +108,14 @@
 #define FW_4H5			"F08LL"
 #define FW_2P3			"J16LL"
 #define FW_2T2			"A20LL"
+#define FW_3P3			"K16LL"
 
 #define SDCARD_FW
 #define FIMC_IS_FW_2P2				"fimc_is_fw2_2p2.bin"
 #define FIMC_IS_FW_2P2_12M				"fimc_is_fw2_2p2_12m.bin"
 #define FIMC_IS_FW_2P3				"fimc_is_fw2_2p3.bin"
 #define FIMC_IS_FW_3L2				"fimc_is_fw2_3l2.bin"
+#define FIMC_IS_FW_3P3				"fimc_is_fw2_3p3.bin"
 #define FIMC_IS_FW_4H5				"fimc_is_fw2_4h5.bin"
 #define FIMC_IS_FW_IMX134			"fimc_is_fw2_imx134.bin"
 #define FIMC_IS_FW_IMX228			"fimc_is_fw2_imx228.bin"
@@ -134,6 +136,7 @@
 #define FIMC_IS_IMX134_SETF			"setfile_imx134.bin"
 #define FIMC_IS_4H5_SETF			"setfile_4h5.bin"
 #define FIMC_IS_3L2_SETF			"setfile_3l2.bin"
+#define FIMC_IS_3P3_SETF			"setfile_3p3.bin"
 #define FIMC_IS_6B2_SETF			"setfile_6b2.bin"
 #define FIMC_IS_8B1_SETF			"setfile_8b1.bin"
 #define FIMC_IS_6D1_SETF			"setfile_6d1.bin"
@@ -170,6 +173,7 @@
 #define FIMC_IS_CAL_MAP_VER_SIZE     4
 #define FIMC_IS_PROJECT_NAME_SIZE    8
 #define FIMC_IS_ISP_SETFILE_VER_SIZE 6
+#define FIMC_IS_MODULE_ID_SIZE       10
 
 enum {
         CC_BIN1 = 0,
@@ -201,6 +205,8 @@ struct fimc_is_from_info {
 	u32		shading_end_addr;
 	u32		setfile_start_addr;
 	u32		setfile_end_addr;
+	u32		af_cal_pan;
+	u32		af_cal_macro;
 	char	header_ver[FIMC_IS_HEADER_VER_SIZE + 1];
 	char	cal_map_ver[FIMC_IS_CAL_MAP_VER_SIZE + 1];
 	char	setfile_ver[FIMC_IS_SETFILE_VER_SIZE + 1];
@@ -210,6 +216,7 @@ struct fimc_is_from_info {
 	char	load_fw_name[50];
 	char	load_setfile_name[50];
 	char	project_name[FIMC_IS_PROJECT_NAME_SIZE + 1];
+	u8		from_module_id[FIMC_IS_MODULE_ID_SIZE + 1];
 	bool	is_caldata_read;
 	bool	is_check_cal_reload;
 #ifdef CONFIG_COMPANION_USE
@@ -327,6 +334,7 @@ int fimc_is_sec_read_setfile(struct fimc_is_core *core);
 int fimc_is_sec_fw_sel_eeprom(struct device *dev, int id, bool headerOnly);
 #endif
 int fimc_is_sec_write_fw(struct fimc_is_core *core, struct device *dev);
+int fimc_is_sec_check_reload(void);
 #if !defined(CONFIG_CAMERA_EEPROM_SUPPORT_REAR)
 int fimc_is_sec_readcal(struct fimc_is_core *core);
 int fimc_is_sec_fw_sel(struct fimc_is_core *core, struct device *dev, bool headerOnly);

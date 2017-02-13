@@ -117,7 +117,7 @@ static int s3c_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
 	spin_lock_irqsave(&pwm_spinlock, flags);
 
 	if (!pwm_enable_cnt && s3c->clk_ctrl)
-		clk_prepare_enable(s3c->clk);
+		clk_enable(s3c->clk);
 
 	if (s3c->need_hw_init)
 		s3c_pwm_restore(s3c);
@@ -183,7 +183,7 @@ static void s3c_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	s3c_pwm->running = 0;
 	pwm_enable_cnt--;
 	if (!pwm_enable_cnt && s3c->clk_ctrl)
-		clk_disable_unprepare(s3c->clk);
+		clk_disable(s3c->clk);
 
 	spin_unlock_irqrestore(&pwm_spinlock, flags);
 }
@@ -226,9 +226,6 @@ static int s3c_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	 * fact that anything faster than 1Hz is easily representable
 	 * by 32bits. */
 
-	if (s3c->need_hw_init)
-		s3c_pwm_restore(s3c);
-
 	if (period_ns > NS_IN_HZ || duty_ns > NS_IN_HZ)
 		return -ERANGE;
 
@@ -241,10 +238,8 @@ static int s3c_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	period = NS_IN_HZ / period_ns;
 
+	clk_enable(s3c->clk);
 	/* Check to see if we are changing the clock rate of the PWM */
-
-	clk_prepare_enable(s3c->clk);
-
 	if (s3c_pwm->period_ns != period_ns && pwm_is_tdiv(s3c_pwm)) {
 		tin_rate = pwm_calc_tin(pwm, period);
 		clk_set_rate(s3c_pwm->clk_div, tin_rate);
@@ -304,8 +299,9 @@ static int s3c_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	pwm_dbg(s3c, "tin_ns=%lu, tcmp=%ld/%lu\n", tin_ns, tcmp, tcnt);
 
 	/* Update the PWM register block. */
-
 	spin_lock_irqsave(&pwm_spinlock, flags);
+	if (s3c->need_hw_init)
+		s3c_pwm_restore(s3c);
 
 	__raw_writel(tcmp, reg_base + REG_TCMPB(id));
 	__raw_writel(tcnt, reg_base + REG_TCNTB(id));
@@ -338,10 +334,9 @@ static int s3c_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	s3c_pwm->duty_ns = duty_ns;
 	s3c_pwm->period_ns = period_ns;
 	s3c_pwm->duty_cycle = duty_cycle;
-
 	spin_unlock_irqrestore(&pwm_spinlock, flags);
 out:
-	clk_disable_unprepare(s3c->clk);
+	clk_disable(s3c->clk);
 
 	return ret;
 }
@@ -390,7 +385,6 @@ static int s3c_pwm_request(struct pwm_chip *chip,
 	if (!s3c_pwm)
 		return -ENOMEM;
 
-	clk_prepare_enable(s3c->clk);
 	/* calculate base of control bits in TCON */
 	s3c_pwm->tcon_base = id == 0 ? 0 : (id * 4) + 4;
 	s3c_pwm->pwm_id = id;
@@ -417,18 +411,18 @@ static int s3c_pwm_request(struct pwm_chip *chip,
 	s3c_pwm->clk_div = clk_timers;
 
 	spin_lock_irqsave(&pwm_spinlock, flags);
+	clk_enable(s3c->clk);
 	s3c_pwm_init(s3c, s3c_pwm);
+	clk_disable(s3c->clk);
 	spin_unlock_irqrestore(&pwm_spinlock, flags);
 
 	s3c->s3c_pwm[id] = s3c_pwm;
 
 	pwm_dbg(s3c, "config bits %02x\n",
 		(__raw_readl(reg_base + REG_TCON) >> s3c_pwm->tcon_base) & 0x0f);
-	clk_disable_unprepare(s3c->clk);
 	return 0;
 
 err:
-	clk_disable_unprepare(s3c->clk);
 	devm_kfree(chip->dev, s3c_pwm);
 	return ret;
 }
@@ -573,7 +567,7 @@ static int s3c_pwm_probe(struct platform_device *pdev)
 						"clock-control", NULL);
 #endif
 	if (s3c->clk_ctrl)
-		clk_disable_unprepare(s3c->clk);
+		clk_disable(s3c->clk);
 
 	g_s3c = s3c;
 	ret = pwmchip_add(&s3c->chip);
@@ -608,7 +602,7 @@ static void s3c_pwm_save(struct s3c_chip *s3c)
 	unsigned char i;
 
 	if (!pwm_enable_cnt && s3c->clk_ctrl && !s3c->need_hw_init)
-		clk_prepare_enable(s3c->clk);
+		clk_enable(s3c->clk);
 
 	if (!pwm_is_s3c24xx(s3c)) {
 		for (i = 0; i < NPWM; i++) {
@@ -638,7 +632,7 @@ static void s3c_pwm_save(struct s3c_chip *s3c)
 	if (pwm_enable_cnt)
 	s3c->reg_tcfg0 = __raw_readl(s3c->reg_base + REG_TCFG0);
 
-	clk_disable_unprepare(s3c->clk);
+	clk_disable(s3c->clk);
 }
 
 static void s3c_pwm_restore(struct s3c_chip *s3c)
@@ -646,7 +640,7 @@ static void s3c_pwm_restore(struct s3c_chip *s3c)
 	struct s3c_pwm_device *s3c_pwm;
 	unsigned char i;
 
-	clk_prepare_enable(s3c->clk);
+	clk_enable(s3c->clk);
 
 	/* Restore pwm registers*/
 	if (pwm_enable_cnt)
@@ -679,7 +673,7 @@ static int s3c_pwm_resume(struct device *dev)
 	s3c_pwm_restore(s3c);
 
 	if (!pwm_enable_cnt && s3c->clk_ctrl && !s3c->need_hw_init)
-		clk_disable_unprepare(s3c->clk);
+		clk_disable(s3c->clk);
 
 	return 0;
 }

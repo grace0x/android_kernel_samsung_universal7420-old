@@ -9,7 +9,8 @@ obj-$(CONFIG_LINK_DEVICE_MEMORY) += link_device_memory.o \
 				    link_device_memory_main.o \
 				    link_device_memory_snapshot.o \
 				    link_device_memory_flow_control.o \
-				    link_device_memory_debug.o
+				    link_device_memory_debug.o \
+				    modem_notifier.o
 
 obj-$(CONFIG_LINK_CONTROL_MSG_IOSM) += link_ctrlmsg_iosm.o
 obj-$(CONFIG_LINK_CONTROL_MSG_COMMAND) += link_ctrlmsg_command.o

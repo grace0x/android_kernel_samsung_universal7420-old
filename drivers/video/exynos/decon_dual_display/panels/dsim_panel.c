@@ -20,6 +20,9 @@
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 #include "mdnie.h"
+#if defined(CONFIG_PANEL_S6E3FA3)
+#include "mdnie_lite_table_v.h"
+#endif
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
@@ -94,9 +97,6 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 {
 	int ret = 0;
 	struct panel_private *panel = &dsim->priv;
-#if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	u16 coordinate[2] = {0, };
-#endif
 	const char *lcd_device_name[2] = {
 		"panel",
 		"panel_1"
@@ -126,12 +126,11 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	panel->temperature = NORMAL_TEMPERATURE;
 	panel->acl_enable = 0;
 	panel->current_acl = 0;
-	panel->auto_brightness = 0;
 	panel->siop_enable = 0;
 	panel->current_hbm = 0;
 	panel->current_vint = 0;
 
-	panel->weakness_hbm_comp = 0;
+	panel->adaptive_control = 1;
 
 	mutex_init(&panel->lock);
 #ifdef CONFIG_EXYNOS_DECON_LCD_MCD
@@ -150,10 +149,10 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	coordinate[0] = (u16)panel->coordinate[0];
-	coordinate[1] = (u16)panel->coordinate[1];
-	if (panel->mdnie_support)
-		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, coordinate, dsim->id);
+	if (panel->mdnie_support) {
+		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, panel->coordinate, &tune_info);
+		panel->mdnie_class = get_mdnie_class();
+	}
 #endif
 
 probe_err:

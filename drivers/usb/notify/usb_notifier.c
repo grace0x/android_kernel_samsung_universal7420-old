@@ -16,11 +16,11 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #endif
-#ifdef CONFIG_MUIC_NOTIFIER
+#if defined(CONFIG_MUIC_NOTIFIER)
 #include <linux/muic/muic.h>
 #include <linux/muic/muic_notifier.h>
 #endif
-#ifdef CONFIG_VBUS_NOTIFIER
+#if defined(CONFIG_VBUS_NOTIFIER)
 #include <linux/vbus_notifier.h>
 #endif
 #include <linux/battery/sec_charging_common.h>
@@ -28,9 +28,11 @@
 
 struct usb_notifier_platform_data {
 	struct	notifier_block usb_nb;
+#if defined(CONFIG_VBUS_NOTIFIER)
 	struct	notifier_block vbus_nb;
+#endif
 	int	gpio_redriver_en;
-	int can_diable_usb;
+	int can_disable_usb;
 };
 
 #ifdef CONFIG_OF
@@ -48,9 +50,9 @@ static void of_get_usb_redriver_dt(struct device_node *np,
 
 	pr_info("%s, gpios_redriver_en %d\n", __func__, gpio);
 
-	pdata->can_diable_usb =
+	pdata->can_disable_usb =
 		!(of_property_read_bool(np, "samsung,unsupport-disable-usb"));
-	pr_info("%s, can_diable_usb %d\n", __func__, pdata->can_diable_usb);
+	pr_info("%s, can_disable_usb %d\n", __func__, pdata->can_disable_usb);
 	return;
 }
 
@@ -67,6 +69,45 @@ static int of_usb_notifier_dt(struct device *dev,
 }
 #endif
 
+static struct device_node *exynos_udc_parse_dt(void)
+{
+	struct platform_device *pdev = NULL;
+	struct device *dev = NULL;
+	struct device_node *np = NULL;
+
+	/**
+	 * For previous chips such as Exynos7420 and Exynos7890
+	*/
+	np = of_find_compatible_node(NULL, NULL, "samsung,exynos5-dwusb3");
+	if (np)
+		goto find;
+
+	np = of_find_compatible_node(NULL, NULL, "samsung,usb-notifier");
+	if (!np) {
+		pr_err("%s: failed to get the usb-notifier device node\n",
+			__func__);
+		goto err;
+	}
+
+	pdev = of_find_device_by_node(np);
+	if (!pdev) {
+		pr_err("%s: failed to get platform_device\n", __func__);
+		goto err;
+	}
+
+	dev = &pdev->dev;
+	np = of_parse_phandle(dev->of_node, "udc", 0);
+	if (!np) {
+		dev_info(dev, "udc device is not available\n");
+		goto err;
+	}
+find:
+	return np;
+err:
+	return NULL;
+}
+
+
 #if defined(CONFIG_MUIC_NOTIFIER)
 static void check_usb_vbus_state(int state)
 {
@@ -75,7 +116,7 @@ static void check_usb_vbus_state(int state)
 
 	pr_info("%s vbus state = %d\n", __func__, state);
 
-	np = of_find_compatible_node(NULL, NULL, "samsung,exynos5-dwusb3");
+	np = exynos_udc_parse_dt();
 	if (np) {
 		pdev = of_find_device_by_node(np);
 		of_node_put(np);
@@ -110,7 +151,7 @@ static void check_usb_id_state(int state)
 
 	pr_info("%s id state = %d\n", __func__, state);
 
-	np = of_find_compatible_node(NULL, NULL, "samsung,exynos5-dwusb3");
+	np = exynos_udc_parse_dt();
 	if (np) {
 		pdev = of_find_device_by_node(np);
 		of_node_put(np);
@@ -224,8 +265,7 @@ static int usb_handle_notification(struct notifier_block *nb,
 	return 0;
 }
 #endif
-
-#ifdef CONFIG_VBUS_NOTIFIER
+#if defined(CONFIG_VBUS_NOTIFIER)
 static int vbus_handle_notification(struct notifier_block *nb,
 		unsigned long cmd, void *data)
 {
@@ -264,16 +304,15 @@ static int otg_accessory_power(bool enable)
 	if (!np_charger) {
 		pr_err("%s: failed to get the battery device node\n", __func__);
 		return 0;
-	} else {
-		if (!of_property_read_string(np_charger, "battery,charger_name",
-					(char const **)&charger_name)) {
+	}
+
+	if (!of_property_read_string(np_charger, "battery,charger_name",
+			(char const **)&charger_name)) {
 			pr_info("%s: charger_name = %s\n", __func__,
 					charger_name);
-		} else {
-			pr_err("%s: failed to get the charger name\n"
-								, __func__);
-			return 0;
-		}
+	} else {
+		pr_err("%s: failed to get the charger name\n", __func__);
+		return 0;
 	}
 
 	val.intval = enable;
@@ -300,16 +339,15 @@ static int set_online(int event, int state)
 	if (!np_charger) {
 		pr_err("%s: failed to get the battery device node\n", __func__);
 		return 0;
-	} else {
-		if (!of_property_read_string(np_charger, "battery,charger_name",
-					(char const **)&charger_name)) {
+	}
+
+	if (!of_property_read_string(np_charger, "battery,charger_name",
+			(char const **)&charger_name)) {
 			pr_info("%s: charger_name = %s\n", __func__,
 					charger_name);
-		} else {
-			pr_err("%s: failed to get the charger name\n",
-								 __func__);
-			return 0;
-		}
+	} else {
+		pr_err("%s: failed to get the charger name\n", __func__);
+		return 0;
 	}
 
 	if (state)
@@ -361,23 +399,21 @@ static struct otg_notify dwc_lsi_notify = {
 	.vbus_detect_gpio = -1,
 	.is_wakelock = 1,
 	.booting_delay_sec = 10,
-	.auto_drive_vbus = 1,
+	.auto_drive_vbus = NOTIFY_OP_POST,
 	.device_check_sec = 3,
 	.set_battcall = set_online,
 };
 
 static int usb_notifier_probe(struct platform_device *pdev)
 {
-	int ret = 0;
 	struct usb_notifier_platform_data *pdata = NULL;
+	int ret = 0;
 
 	if (pdev->dev.of_node) {
 		pdata = devm_kzalloc(&pdev->dev,
 			sizeof(struct usb_notifier_platform_data), GFP_KERNEL);
-		if (!pdata) {
-			dev_err(&pdev->dev, "Failed to allocate memory\n");
+		if (!pdata)
 			return -ENOMEM;
-		}
 
 		ret = of_usb_notifier_dt(&pdev->dev, pdata);
 		if (ret < 0) {
@@ -390,15 +426,15 @@ static int usb_notifier_probe(struct platform_device *pdev)
 		pdata = pdev->dev.platform_data;
 
 	dwc_lsi_notify.redriver_en_gpio = pdata->gpio_redriver_en;
-	dwc_lsi_notify.disable_control = pdata->can_diable_usb;
+	dwc_lsi_notify.disable_control = pdata->can_disable_usb;
 	set_otg_notify(&dwc_lsi_notify);
 	set_notify_data(&dwc_lsi_notify, pdata);
 
-#ifdef CONFIG_MUIC_NOTIFIER
+#if defined(CONFIG_MUIC_NOTIFIER)
 	muic_notifier_register(&pdata->usb_nb, usb_handle_notification,
 			       MUIC_NOTIFY_DEV_USB);
 #endif
-#ifdef CONFIG_VBUS_NOTIFIER
+#if defined(CONFIG_VBUS_NOTIFIER)
 	vbus_notifier_register(&pdata->vbus_nb, vbus_handle_notification,
 			       MUIC_NOTIFY_DEV_USB);
 #endif
@@ -448,7 +484,7 @@ static void __init usb_notifier_exit(void)
 	platform_driver_unregister(&usb_notifier_driver);
 }
 
-late_initcall(usb_notifier_init);
+module_init(usb_notifier_init);
 module_exit(usb_notifier_exit);
 
 MODULE_AUTHOR("inchul.im <inchul.im@samsung.com>");

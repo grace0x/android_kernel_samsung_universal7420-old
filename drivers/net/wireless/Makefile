@@ -59,10 +59,17 @@ ifneq ($(CONFIG_BCM4359),)
 obj-$(CONFIG_BCM4359)   += bcmdhd4359/
 obj-$(CONFIG_MACH_UNIVERSAL7420) += bcmdhd4359/dhd_custom_memprealloc.o
 obj-$(CONFIG_MACH_UNIVERSAL7420) += bcmdhd4359/dhd_custom_exynos.o
-else
+endif
+
+ifneq ($(CONFIG_BCM4358),)
 obj-$(CONFIG_BCM4358)   += bcmdhd4358/
 obj-$(CONFIG_MACH_UNIVERSAL7420) += bcmdhd4358/dhd_custom_memprealloc.o
 obj-$(CONFIG_MACH_UNIVERSAL7420) += bcmdhd4358/dhd_custom_exynos.o
+endif
+
+ifneq ($(CONFIG_BCM43455),)
+obj-$(CONFIG_BCM43455)   += bcmdhd/
+obj-$(CONFIG_MACH_UNIVERSAL7420) += bcmdhd/dhd_custom_exynos.o
 endif
 
 obj-$(CONFIG_BRCMFMAC)	+= brcm80211/

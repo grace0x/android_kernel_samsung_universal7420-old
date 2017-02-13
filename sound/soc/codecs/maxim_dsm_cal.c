@@ -44,10 +44,9 @@ static int maxdsm_cal_read_file(char *filename, char *data, size_t size)
 	set_fs(KERNEL_DS);
 	cal_filp = filp_open(filename, O_RDONLY, 0660);
 	if (IS_ERR(cal_filp)) {
-		pr_err("%s: dsm works with default calibration.\n", __func__);
-		ret = PTR_ERR(cal_filp);
+		pr_err("%s: there is no dsm_cal file\n", __func__);
 		set_fs(old_fs);
-		return ret;
+		return -EEXIST;
 	}
 	ret = cal_filp->f_op->read(cal_filp, data, size, &cal_filp->f_pos);
 	if (ret != size) {
@@ -88,6 +87,12 @@ static int maxdsm_cal_write_file(char *filename, char *data, size_t size)
 	return ret;
 }
 
+struct class *maxdsm_cal_get_class(void)
+{
+	return g_mdc->class;
+}
+EXPORT_SYMBOL_GPL(maxdsm_cal_get_class);
+
 struct regmap *maxdsm_cal_set_regmap(
 		struct regmap *regmap)
 {
@@ -99,7 +104,7 @@ struct regmap *maxdsm_cal_set_regmap(
 }
 EXPORT_SYMBOL_GPL(maxdsm_cal_set_regmap);
 
-int maxdsm_cal_set_temp(uint32_t value)
+int maxdsm_cal_set_temp(int value)
 {
 	char data[12];
 	int ret;
@@ -114,7 +119,7 @@ int maxdsm_cal_set_temp(uint32_t value)
 }
 EXPORT_SYMBOL_GPL(maxdsm_cal_set_temp);
 
-int maxdsm_cal_get_temp(uint32_t *value)
+int maxdsm_cal_get_temp(int *value)
 {
 	char data[12];
 	int ret;
@@ -131,7 +136,7 @@ int maxdsm_cal_get_temp(uint32_t *value)
 }
 EXPORT_SYMBOL_GPL(maxdsm_cal_get_temp);
 
-int maxdsm_cal_set_rdc(uint32_t value)
+int maxdsm_cal_set_rdc(int value)
 {
 	char data[12];
 	int ret;
@@ -146,7 +151,7 @@ int maxdsm_cal_set_rdc(uint32_t value)
 }
 EXPORT_SYMBOL_GPL(maxdsm_cal_set_rdc);
 
-int maxdsm_cal_get_rdc(uint32_t *value)
+int maxdsm_cal_get_rdc(int *value)
 {
 	char data[12];
 	int ret;
@@ -168,20 +173,30 @@ static int maxdsm_cal_regmap_write(struct regmap *regmap,
 		unsigned int val)
 {
 	return regmap ?
-		regmap_write(g_mdc->regmap, reg, val) : -ENXIO;
+		regmap_write(regmap, reg, val) : -ENXIO;
 }
 
 static int maxdsm_cal_regmap_read(struct regmap *regmap,
 		unsigned int reg,
 		unsigned int *val)
 {
-	return regmap ?
-		regmap_read(g_mdc->regmap, reg, val) : -ENXIO;
+	int ret;
+
+	*val = 0;
+	ret = regmap ?
+		regmap_read(regmap, reg, val) : -ENXIO;
+	if (ret < 0)
+		*val = 0;
+
+	return ret;
 }
 
-static void maxdsm_cal_start_calibration(
+static int maxdsm_cal_start_calibration(
 		struct maxim_dsm_cal *mdc)
 {
+	int ret = 0;
+	uint32_t feature_en;
+
 #ifdef CONFIG_SND_SOC_MAXIM_DSM
 	mdc->platform_type = maxdsm_get_platform_type();
 #else
@@ -193,14 +208,24 @@ static void maxdsm_cal_start_calibration(
 	case PLATFORM_TYPE_A:
 		maxdsm_cal_regmap_read(mdc->regmap,
 				ADDR_FEATURE_ENABLE,
-				&mdc->info.feature_en);
+				&feature_en);
+
+		mdc->info.feature_en = feature_en;
+
+		/* remove SPT bit */
+		feature_en &= ~0x80;
+
+		/* enable Rdc caliration bit */
+		feature_en |= 0x20;
+
 		maxdsm_cal_regmap_write(mdc->regmap,
 				ADDR_FEATURE_ENABLE,
-				0x3F);
+				feature_en);
 		break;
 	case PLATFORM_TYPE_B:
 #ifdef CONFIG_SND_SOC_MAXIM_DSM
-		maxdsm_set_feature_en(1);
+		if (maxdsm_set_feature_en(1))
+			ret = -EAGAIN;
 #endif /* CONFIG_SND_SOC_MAXIM_DSM */
 		break;
 	default:
@@ -208,6 +233,8 @@ static void maxdsm_cal_start_calibration(
 	}
 
 	mdc->info.previous_jiffies = jiffies;
+
+	return ret;
 }
 
 static uint32_t maxdsm_cal_read_dcresistance(
@@ -233,9 +260,11 @@ static uint32_t maxdsm_cal_read_dcresistance(
 	return dcresistance;
 }
 
-static void maxdsm_cal_end_calibration(
+static int maxdsm_cal_end_calibration(
 		struct maxim_dsm_cal *mdc)
 {
+	int ret = 0;
+
 	switch (mdc->platform_type) {
 	case PLATFORM_TYPE_A:
 		maxdsm_cal_regmap_write(mdc->regmap,
@@ -244,14 +273,15 @@ static void maxdsm_cal_end_calibration(
 		break;
 	case PLATFORM_TYPE_B:
 #ifdef CONFIG_SND_SOC_MAXIM_DSM
-		maxdsm_set_rdc_temp(mdc->values.rdc,
-				(uint32_t)mdc->values.temp / 10);
-		maxdsm_set_feature_en(0);
+		if (maxdsm_set_feature_en(0))
+			ret = -EAGAIN;
 #endif /* CONFIG_SND_SOC_MAXIM_DSM */
 		break;
 	default:
 		break;
 	}
+
+	return ret;
 }
 
 static int maxdsm_cal_get_temp_from_power_supply(void)
@@ -279,6 +309,13 @@ static void maxdsm_cal_completed(struct maxim_dsm_cal *mdc)
 	char temp[12] = {0,};
 	int ret;
 
+	ret = maxdsm_cal_end_calibration(mdc);
+	if (ret) {
+		pr_err("%s: A error occurred in finishing calibration\n",
+				__func__);
+		return;
+	}
+
 	/* We try to get ambient temp by using power supply core */
 	mdc->values.temp = maxdsm_cal_get_temp_from_power_supply();
 
@@ -296,11 +333,10 @@ static void maxdsm_cal_completed(struct maxim_dsm_cal *mdc)
 	if (ret < 0)
 		mdc->values.rdc = ret;
 
-	maxdsm_cal_end_calibration(mdc);
-
 	mdc->values.status = 0;
 
-	dbg_maxdsm("temp=%d rdc=%d", mdc->values.temp, mdc->values.rdc);
+	dbg_maxdsm("temp=%d rdc=0x%08x",
+			mdc->values.temp, mdc->values.rdc);
 }
 
 static void maxdsm_cal_work(struct work_struct *work)
@@ -326,7 +362,7 @@ static void maxdsm_cal_work(struct work_struct *work)
 	mdc->info.remaining
 		-= jiffies_to_msecs(diff);
 
-	dbg_maxdsm("dcresistance=%d remaining=%d duration=%d",
+	dbg_maxdsm("dcresistance=0x%08x remaining=%d duration=%d",
 			dcresistance,
 			mdc->info.remaining,
 			mdc->info.duration);
@@ -347,20 +383,26 @@ static void maxdsm_cal_work(struct work_struct *work)
 	mutex_unlock(&mdc->mutex);
 }
 
-static void maxdsm_cal_check(
+static int maxdsm_cal_check(
 		struct maxim_dsm_cal *mdc, int action)
 {
+	int ret = 0;
+
 	if (delayed_work_pending(&mdc->work))
 		cancel_delayed_work(&mdc->work);
 
 	if (action) {
 		mdc->info.remaining = mdc->info.duration;
 		mdc->values.count = mdc->values.avg = 0;
-		maxdsm_cal_start_calibration(mdc);
+		ret = maxdsm_cal_start_calibration(mdc);
+		if (ret)
+			return ret;
 		queue_delayed_work(mdc->wq,
 				&mdc->work,
 				1);
 	}
+
+	return ret;
 }
 
 static ssize_t maxdsm_cal_min_show(struct device *dev,
@@ -541,16 +583,20 @@ static ssize_t maxdsm_cal_status_store(struct device *dev,
 	int status = 0;
 
 	if (!kstrtou32(buf, 0, &status)) {
+		status = status > 0 ? 1 : 0;
 		if (status == g_mdc->values.status) {
 			dbg_maxdsm("Already run. It will be ignored.");
 		} else {
 			mutex_lock(&g_mdc->mutex);
 			g_mdc->values.status = status;
 			mutex_unlock(&g_mdc->mutex);
-			if (g_mdc->values.status)
-				maxdsm_cal_check(g_mdc, 1);
-			else
-				maxdsm_cal_check(g_mdc, 0);
+			if (maxdsm_cal_check(g_mdc, status)) {
+				pr_err("%s: The codec was connected?\n",
+						__func__);
+				mutex_lock(&g_mdc->mutex);
+				g_mdc->values.status = 0;
+				mutex_unlock(&g_mdc->mutex);
+			}
 		}
 	}
 

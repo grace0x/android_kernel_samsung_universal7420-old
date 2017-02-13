@@ -501,7 +501,6 @@ static inline int platform_pci_run_wake(struct pci_dev *dev, bool enable)
 extern int exynos_pcie_dump_link_down_status(int ch_num);
 static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 {
-	u32 device_vendor_id;
 	u16 pmcsr;
 	bool need_restore = false;
 
@@ -531,15 +530,7 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 	   || (state == PCI_D2 && !dev->d2_support))
 		return -EIO;
 
-	if (dev->vendor == 0x14E4) {
-		pci_read_config_dword(dev, 0x0, &device_vendor_id);
-		dev_info(&dev->dev, "[debug] step 1, device_vendor_id reg : %x\n", device_vendor_id);
-	}
-
 	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pmcsr);
-
-	if (dev->vendor == 0x14E4)
-		dev_info(&dev->dev, "[debug] step 2, PMCSR reg value: %x\n", pmcsr);
 
 	/* If we're (effectively) in D3, force entire word to 0.
 	 * This doesn't affect PME_Status, disables PME_En, and
@@ -567,12 +558,6 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 	/* enter specified state */
 	pci_write_config_word(dev, dev->pm_cap + PCI_PM_CTRL, pmcsr);
 
-	if (dev->vendor == 0x14E4) {
-		dev_info(&dev->dev, "[debug] step 3, PMCSR reg value: %x\n", pmcsr);
-		pci_read_config_dword(dev, 0x0, &device_vendor_id);
-		dev_info(&dev->dev, "[debug] step 4, device_vendor_id reg : %x\n", device_vendor_id);
-	}
-
 	/* Mandatory power management transition delays */
 	/* see PCI PM 1.1 5.6.1 table 18 */
 	if (state == PCI_D3hot || dev->current_state == PCI_D3hot)
@@ -581,13 +566,8 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 		udelay(PCI_PM_D2_DELAY);
 
 	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pmcsr);
-
-	dev_info(&dev->dev, "[debug] pmcsr reg : %x dev->current_state : %d\n", pmcsr, dev->current_state);
-	pci_read_config_dword(dev, 0x0, &device_vendor_id);
-	dev_info(&dev->dev, "[debug] device_vendor_id reg : %x\n", device_vendor_id);
-
 	dev->current_state = (pmcsr & PCI_PM_CTRL_STATE_MASK);
-	if (dev->current_state != state && printk_ratelimit()){
+	if (dev->current_state != state && printk_ratelimit()) {
 		dev_info(&dev->dev, "Refused to change power state, "
 			"currently in D%d, PCI_PM_CTRL=%x\n",
 			dev->current_state, (u32)pmcsr);
@@ -640,10 +620,6 @@ void pci_update_current_state(struct pci_dev *dev, pci_power_t state)
 			return;
 		}
 		pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &pmcsr);
-
-		if (dev->vendor == 0x14E4)
-			dev_info(&dev->dev, "[debug] setp 5, PMCSR reg value: %x\n", pmcsr);
-
 		dev->current_state = (pmcsr & PCI_PM_CTRL_STATE_MASK);
 	} else {
 		dev->current_state = state;
@@ -892,32 +868,13 @@ static int pci_save_pcie_state(struct pci_dev *dev)
 	}
 
 	cap = (u16 *)&save_state->cap.data[0];
-
-	/* For PCIe1 Configuration Register */
-	if((dev->vendor == 0x144d && dev->device == 0xa575) || (dev->vendor == 0x14E4)) {
-		pcie_capability_read_word(dev, PCI_EXP_DEVCTL, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_DEVCTL: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_LNKCTL, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_LNKCTL: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_SLTCTL, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_SLTCTL: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_RTCTL,  &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_RTCTL: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_DEVCTL2, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_DEVCTL2: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_LNKCTL2, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_LNKCTL2: %x\n", cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_SLTCTL2, &cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_SLTCTL2: %x\n", cap[i++]);
-	} else {
-		pcie_capability_read_word(dev, PCI_EXP_DEVCTL, &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_LNKCTL, &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_SLTCTL, &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_RTCTL,  &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_DEVCTL2, &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_LNKCTL2, &cap[i++]);
-		pcie_capability_read_word(dev, PCI_EXP_SLTCTL2, &cap[i++]);
-	}
+	pcie_capability_read_word(dev, PCI_EXP_DEVCTL, &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_LNKCTL, &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_SLTCTL, &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_RTCTL,  &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_DEVCTL2, &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_LNKCTL2, &cap[i++]);
+	pcie_capability_read_word(dev, PCI_EXP_SLTCTL2, &cap[i++]);
 
 	return 0;
 }
@@ -933,32 +890,13 @@ static void pci_restore_pcie_state(struct pci_dev *dev)
 		return;
 
 	cap = (u16 *)&save_state->cap.data[0];
-
-	/* For PCIe1 Configuration Register */
-	if((dev->vendor == 0x144d && dev->device == 0xa575) || (dev->vendor == 0x14E4)) {
-		pcie_capability_write_word(dev, PCI_EXP_DEVCTL, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_DEVCTL: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_LNKCTL, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_LNKCTL: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_SLTCTL, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_SLTCTL: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_RTCTL, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_RTCTL: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_DEVCTL2, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_DEVCTL2: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_LNKCTL2, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_LNKCTL2: %x\n", cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_SLTCTL2, cap[i]);
-		dev_info(&dev->dev, "PCI_EXP_SLTCTL2: %x\n", cap[i++]);
-	} else {
-		pcie_capability_write_word(dev, PCI_EXP_DEVCTL, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_LNKCTL, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_SLTCTL, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_RTCTL, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_DEVCTL2, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_LNKCTL2, cap[i++]);
-		pcie_capability_write_word(dev, PCI_EXP_SLTCTL2, cap[i++]);
-	}
+	pcie_capability_write_word(dev, PCI_EXP_DEVCTL, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_LNKCTL, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_SLTCTL, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_RTCTL, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_DEVCTL2, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_LNKCTL2, cap[i++]);
+	pcie_capability_write_word(dev, PCI_EXP_SLTCTL2, cap[i++]);
 }
 
 
@@ -1008,13 +946,9 @@ pci_save_state(struct pci_dev *dev)
 {
 	int i;
 	/* XXX: 100% dword access ok here? */
-	for (i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i++)
 		pci_read_config_dword(dev, i * 4, &dev->saved_config_space[i]);
 
-		/* For PCIe1 Configuration Register */
-		if((dev->vendor == 0x144d && dev->device == 0xa575) || (dev->vendor == 0x14E4))
-			dev_info(&dev->dev, "reg offset: %d: %x\n", i * 4, dev->saved_config_space[i]);
-	}
 	dev->state_saved = true;
 	if ((i = pci_save_pcie_state(dev)) != 0)
 		return i;
@@ -1029,12 +963,6 @@ static void pci_restore_config_dword(struct pci_dev *pdev, int offset,
 	u32 val;
 
 	pci_read_config_dword(pdev, offset, &val);
-
-	if((pdev->vendor == 0x144d && pdev->device == 0xa575) || (pdev->vendor == 0x14E4)) {
-		dev_info(&pdev->dev, "restoring config space at offset "
-			"%#x (was %#x, writing %#x)\n", offset, val, saved_val);
-	}
-
 	if (val == saved_val)
 		return;
 
@@ -1046,12 +974,8 @@ static void pci_restore_config_dword(struct pci_dev *pdev, int offset,
 			return;
 
 		pci_read_config_dword(pdev, offset, &val);
-		if (val == saved_val) {
-			if((pdev->vendor == 0x144d && pdev->device == 0xa575) || (pdev->vendor == 0x14E4))
-				dev_info(&pdev->dev, "restoring config space at offset "
-					"%#x (writing %#x)\n", offset, val);
+		if (val == saved_val)
 			return;
-		}
 
 		mdelay(1);
 	}

@@ -2036,6 +2036,7 @@ static int florida_hp_post_disable(struct snd_soc_dapm_widget *w)
 static void clearwater_hp_post_enable(struct snd_soc_dapm_widget *w)
 {
 	unsigned int val;
+	struct arizona_priv *priv = snd_soc_codec_get_drvdata(w->codec);
 
 	switch (w->shift) {
 	case ARIZONA_OUT1L_ENA_SHIFT:
@@ -2047,7 +2048,8 @@ static void clearwater_hp_post_enable(struct snd_soc_dapm_widget *w)
 			snd_soc_update_bits(w->codec,
 				    CLEARWATER_EDRE_HP_STEREO_CONTROL,
 				    ARIZONA_HP1_EDRE_STEREO_MASK,
-				    ARIZONA_HP1_EDRE_STEREO);
+				    priv->edre_stereo_disable ?
+				    0 : ARIZONA_HP1_EDRE_STEREO);
 		break;
 
 	default:
@@ -2184,6 +2186,39 @@ int clearwater_put_dre(struct snd_kcontrol *kcontrol,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(clearwater_put_dre);
+
+int clearwater_edre_stereo_put(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_card *card = codec->card;
+	struct arizona_priv *priv = snd_soc_codec_get_drvdata(codec);
+	int val, ret = 0;
+
+	mutex_lock_nested(&card->dapm_mutex, SND_SOC_DAPM_CLASS_RUNTIME);
+
+	priv->edre_stereo_disable = !ucontrol->value.integer.value[0];
+	val = snd_soc_read(codec, ARIZONA_OUTPUT_ENABLES_1);
+	val &= (ARIZONA_OUT1L_ENA | ARIZONA_OUT1R_ENA);
+
+	if (val == (ARIZONA_OUT1L_ENA | ARIZONA_OUT1R_ENA))
+		ret = snd_soc_put_volsw(kcontrol, ucontrol);
+
+	mutex_unlock(&card->dapm_mutex);
+
+	return ret;
+}
+
+int clearwater_edre_stereo_get(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct arizona_priv *priv = snd_soc_codec_get_drvdata(codec);
+
+	ucontrol->value.integer.value[0] = !priv->edre_stereo_disable;
+
+	return 0;
+}
 
 int arizona_put_out4_edre(struct snd_kcontrol *kcontrol,
 			  struct snd_ctl_elem_value *ucontrol)

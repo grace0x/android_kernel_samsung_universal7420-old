@@ -1,7 +1,6 @@
 #
 config MST_LDO
 	def_bool y
-	depends on !SEC_FACTORY
 
 config MST_NOBLE_TARGET
 	def_bool n

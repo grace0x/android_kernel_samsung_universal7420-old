@@ -83,6 +83,12 @@
 #define PACIFIC_AIF_MAX	3
 #endif
 
+enum {
+	AMP_TYPE_MAX98505,
+	AMP_TYPE_MAX98506,
+	AMP_TYPE_MAX,
+};
+
 static DECLARE_TLV_DB_SCALE(digital_tlv, -6400, 50, 0);
 
 enum {
@@ -134,6 +140,7 @@ struct arizona_machine_priv {
 	u32 aif_format_tdm[3];
 
 	int (*external_amp)(int onoff);
+	u32 amp_type;
 
 #if defined(CONFIG_SND_SOC_MAXIM_DSM_CAL)
 	int dsm_cal_rdc;
@@ -700,9 +707,12 @@ static int pacific_external_amp(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMU:
 		if (priv->external_amp)
 			priv->external_amp(1);
+		if (priv->amp_type == AMP_TYPE_MAX98505 ||
+			priv->amp_type == AMP_TYPE_MAX98506) {
 #if defined(CONFIG_SND_SOC_MAXIM_DSM_CAL)
 		pacific_dsm_cal_apply(card);
 #endif
+		}
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		if (priv->external_amp)
@@ -821,7 +831,7 @@ const struct snd_soc_dapm_route pacific_wm1840_dapm_routes[] = {
 	{ "Third Mic", NULL, "MICBIAS3" },
 	{ "IN4L", NULL, "Third Mic" },
 
-	/* "HiFi Capture" is capture stream of max98505 dai */
+	/* "HiFi Capture" is capture stream of maxim_amp dai */
 	{ "HiFi Capture", NULL, "VI SENSING" },
 
 	{ "IN3L", NULL, "FM In" },
@@ -2131,6 +2141,8 @@ static int pacific_audio_probe(struct platform_device *pdev)
 	struct snd_soc_dai_link *dai_link;
 	struct arizona_machine_priv *priv;
 	int of_route, num_cards;
+	int m;
+	char *amp_name, *codec_dai_name, *codec_name;
 
 	num_cards = (int) ARRAY_SIZE(card_ids);
 	for (n = 0; n < num_cards; n++) {
@@ -2225,6 +2237,40 @@ static int pacific_audio_probe(struct platform_device *pdev)
 		}
 	} else
 		dev_err(&pdev->dev, "Failed to get device node\n");
+
+	/* Find amp device with amp name */
+	for (m = 0; m < AMP_TYPE_MAX; m++) {
+		switch (m) {
+		case AMP_TYPE_MAX98505:
+			amp_name = "max98505";
+			codec_dai_name = "max98505-aif1";
+			codec_name = "max98505.0-0031";
+			priv->amp_type = AMP_TYPE_MAX98505;
+			break;
+		case AMP_TYPE_MAX98506:
+			amp_name = "max98506";
+			codec_dai_name = "max98506-aif1";
+			codec_name = "max98506.0-0031";
+			priv->amp_type = AMP_TYPE_MAX98506;
+			break;
+		default:
+			dev_err(card->dev, "There is no external amp.\n");
+			break;
+		}
+
+		if (of_find_node_by_name(NULL, amp_name) != NULL) {
+			for (n = 0; n < card->num_links; n++) {
+				if (!strcmp(dai_link[n].name, "codec-dsm")) {
+					dai_link[n].codec_dai_name =
+								codec_dai_name;
+					dai_link[n].codec_name = codec_name;
+					break;
+				}
+			}
+			dev_info(card->dev, "Found amp (%s)\n", amp_name);
+			break;
+		}
+	}
 
 	ret = snd_soc_register_card(card);
 	if (ret) {

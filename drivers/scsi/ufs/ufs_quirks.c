@@ -14,10 +14,6 @@
 #include "ufshcd.h"
 #include "ufs_quirks.h"
 
-#ifndef UFS_VENDOR_ID_SAMSUNG
-#define UFS_VENDOR_ID_SAMSUNG	0x1ce
-#endif
-
 #ifndef UFS_VENDOR_ID_TOSHIBA
 #define UFS_VENDOR_ID_TOSHIBA	 0x198
 #endif
@@ -41,6 +37,9 @@ int ufs_get_device_info(struct ufs_hba *hba, struct ufs_card_info *card_data)
 	u8 str_desc_buf[QUERY_DESC_STRING_MAX_SIZE + 1];
 	u8 desc_buf[QUERY_DESC_DEVICE_MAX_SIZE];
 	u8 health_buf[QUERY_DESC_HEALTH_MAX_SIZE];
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	u8 vendor_specific_buf[QUERY_DESC_VENDOR_SPECIFIC_SIZE];
+#endif
 	bool ascii_type;
 
 	err = ufshcd_read_device_desc(hba, desc_buf,
@@ -65,6 +64,27 @@ int ufs_get_device_info(struct ufs_hba *hba, struct ufs_card_info *card_data)
 
 	hba->manufacturer_id = card_data->wmanufacturerid;
 	hba->lifetime = card_data->lifetime;
+
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	if (hba->manufacturer_id == UFS_VENDOR_ID_SAMSUNG &&
+			hba->host->journal_tag == JOURNAL_TAG_UNKNOWN) {
+		vendor_specific_buf[4] = 0;
+		err = ufshcd_read_vendor_specific_desc(hba,
+			QUERY_DESC_IDN_VENDOR, 0, vendor_specific_buf,
+			QUERY_DESC_VENDOR_SPECIFIC_SIZE);
+		if (!err && hba->host && (vendor_specific_buf[4] & 0x1)) {
+			printk("%s: vendor_desc[4]=0x%x. setting UFS journal "
+				"tag support to 1.\n",
+				__func__, vendor_specific_buf[4]);
+			hba->host->journal_tag = JOURNAL_TAG_ON;
+		} else {
+			printk("%s: UFS does not support journal tag "
+				"- vendor_desc[4]=0x%x.(err %d).\n",
+				__func__, vendor_specific_buf[4], err);
+			hba->host->journal_tag = JOURNAL_TAG_OFF;
+		}
+	}
+#endif
 
 	model_index = desc_buf[DEVICE_DESC_PARAM_PRDCT_NAME];
 

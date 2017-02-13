@@ -28,15 +28,9 @@ static int s2mg001_write_reg(struct i2c_client *client, int reg, u8 *buf)
 
 static int s2mg001_read_reg(struct i2c_client *client, int reg, u8 *buf)
 {
-	int ret = 0;
-
 	buf[0] = i2c_smbus_read_byte_data(client, reg);
-	if (buf[0] < 0)
-		dev_err(&client->dev, "%s: err %d\n", __func__, ret);
 
 	buf[1] = i2c_smbus_read_byte_data(client, reg + 1);
-	if (buf[1] < 0)
-		dev_err(&client->dev, "%s: err %d\n", __func__, ret);
 
 	return 0;
 }

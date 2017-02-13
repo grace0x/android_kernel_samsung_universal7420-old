@@ -342,8 +342,10 @@ config SND_SOC_MAXIM_DSM
 	default m if SND_SOC_MAX98505A=m
 	default y if SND_SOC_MAX98505=y
 	default m if SND_SOC_MAX98505=m
+	default y if SND_SOC_MAX98506=y
+	default m if SND_SOC_MAX98506=m
 	help
-	MAX98505 DSM Log Driver
+	MAXIM DSM Log Driver
 
 config SND_SOC_MAXIM_DSM_CAL
 	tristate "Support MAXIM DSM Calibration"
@@ -351,8 +353,10 @@ config SND_SOC_MAXIM_DSM_CAL
 	default m if SND_SOC_MAX98505A=m
 	default y if SND_SOC_MAX98505=y
 	default m if SND_SOC_MAX98505=m
+	default y if SND_SOC_MAX98506=y
+	default m if SND_SOC_MAX98506=m
 	help
-	MAX98505 Calibration Driver
+	MAXIM Calibration Driver
 
 config SND_SOC_MAX98505
 	tristate "Support MAX98505"
@@ -365,6 +369,12 @@ config SND_SOC_MAX98505A
 	depends on I2C
 	help
 	MAX98505A driver
+
+config SND_SOC_MAX98506
+	tristate "Support MAX98506"
+	depends on I2C
+	help
+	MAX98506 driver
 
 config SND_SOC_MAX9850
 	tristate

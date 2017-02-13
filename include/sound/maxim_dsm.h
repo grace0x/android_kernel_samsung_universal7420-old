@@ -1,30 +1,43 @@
 /*
- *
- * Copyright 2011-2012 Maxim Integrated Products
+ * Copyright 2011-2015 Maxim Integrated Products
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
  *  Free Software Foundation;  either version 2 of the  License, or (at your
  *  option) any later version.
- *
  */
 
 #ifndef __SOUND_MAXIM_DSM_H__
 #define __SOUND_MAXIM_DSM_H__
 
 #define DSM_RX_PORT_ID	0x4000
+#define DSM_TX_PORT_ID	(DSM_RX_PORT_ID + 1)
 
-#define AFE_PARAM_ID_ENABLE_DSM_RX    0x10001062
-#define AFE_PARAM_ID_ENABLE_DSM_TX    0x10001063
+#define AFE_MODULE_ID_DSM_RX				0x10001062
+#define AFE_MODULE_ID_DSM_TX				0x0FF1020B
 
-#define DSM_ID_FILTER_GET_AFE_PARAMS 0x00000000
-#define DSM_ID_FILTER_SET_AFE_CNTRLS 0x00000001
+#define AFE_PARAM_ID_ENABLE_DSM_RX_ENABLE	0x10001063
+#define AFE_PARAM_ID_ENABLE_DSM_RX_ALL		0x10001064
+#define AFE_PARAM_ID_ENABLE_DSM_RX_ALL_R	0x10001065
+#define AFE_PARAM_ID_ENABLE_DSM_TX_ENABLE	0x10001063
+#define AFE_PARAM_ID_ENABLE_DSM_TX_ALL		0x10001064
+#define AFE_PARAM_ID_ENABLE_DSM_TX_ALL_R	0x10001065
 
-#define FLAG_WRITE_ALL 0xabefcdab
-#define FLAG_WRITE_CAL_FROM_FILE 0xffff0000
-#define FLAG_WRITE_ONOFF_ONLY	0xcdababef
-#define FLAG_WRITE_RDC_CAL_ONLY 0xca00ca00
-#define FLAG_WRITE_FEATURE_ONLY 0xfea0fea0
+#define DSM_ID_FILTER_GET_AFE_PARAMS		0x00000000
+#define DSM_ID_FILTER_SET_AFE_CNTRLS		0x00000001
+
+#define FLAG_WRITE_ALL						0xabefcdab
+#define FLAG_WRITE_CAL_FROM_FILE			0xffff0000
+#define FLAG_WRITE_ONOFF_ONLY				0xcdababef
+#define FLAG_WRITE_RDC_CAL_ONLY				0xca00ca00
+#define FLAG_WRITE_FEATURE_ONLY				0xfea0fea0
+
+#define RESERVED_ADDR_COUNT		0xFF
+#define START_ADDR_FOR_LSI		0x2A004C
+#define END_ADDR_FOR_LSI		(0x2A027A + RESERVED_ADDR_COUNT)
+
+#define AFE_PORT_ID_START		0x1000
+#define AFE_PORT_ID_END			0x400d
 
 enum maxdsm_version {
 	VERSION_3_0 = 30,
@@ -50,6 +63,10 @@ enum maxdsm_ioctl_cmds {
 	MAXDSM_IOCTL_SET_CAL_DATA,
 	MAXDSM_IOCTL_GET_PLATFORM_TYPE,
 	MAXDSM_IOCTL_SET_PLATFORM_TYPE,
+	MAXDSM_IOCTL_GET_RX_PORT_ID,
+	MAXDSM_IOCTL_SET_RX_PORT_ID,
+	MAXDSM_IOCTL_GET_TX_PORT_ID,
+	MAXDSM_IOCTL_SET_TX_PORT_ID,
 };
 
 enum maxdsm_ignore_param {
@@ -191,6 +208,8 @@ enum maxdsm_4_0_params {
 	PARAM_STIMPEDMODEL_FLAG_SZ,
 	PARAM_Q_NOTCH,
 	PARAM_Q_NOTCH_SZ,
+	PARAM_POWER_MEASUREMENT,
+	PARAM_POWER_MEASUREMENT_SZ,
 	PARAM_DSM_4_0_MAX,
 };
 
@@ -349,6 +368,8 @@ enum maxdsm_4_0_params_a {
 	PARAM_A_Q_NOTCH_HI_SZ,
 	PARAM_A_Q_NOTCH_LO,
 	PARAM_A_Q_NOTCH_LO_SZ,
+	PARAM_A_POWER_MEASUREMENT,
+	PARAM_A_POWER_MEASUREMENT_SZ,
 	PARAM_A_DSM_4_0_MAX,
 };
 
@@ -396,7 +417,8 @@ struct maxim_dsm {
 	uint32_t *param;
 	uint32_t param_size;
 	uint32_t platform_type;
-	uint32_t port_id;
+	uint32_t rx_port_id;
+	uint32_t tx_port_id;
 	uint32_t rx_mod_id;
 	uint32_t tx_mod_id;
 	uint32_t filter_set;
@@ -405,6 +427,7 @@ struct maxim_dsm {
 	uint32_t registered;
 	uint32_t update_cal;
 	uint32_t ignore_mask;
+	uint32_t spk_state;
 };
 
 #ifdef CONFIG_SND_SOC_MAXIM_DSM
@@ -418,17 +441,23 @@ int maxdsm_deinit(void);
 
 uint32_t maxdsm_get_platform_type(void);
 int maxdsm_set_feature_en(int on);
-int maxdsm_set_rdc_temp(uint32_t rdc, uint32_t temp);
+int maxdsm_set_rdc_temp(int rdc, int temp);
 int maxdsm_set_dsm_onoff_status(int on);
 uint32_t maxdsm_get_dcresistance(void);
 
 int maxdsm_update_info(uint32_t *pinfo);
-int maxdsm_get_port_id(void);
+int maxdsm_get_rx_port_id(void);
+int maxdsm_get_tx_port_id(void);
 int maxdsm_get_rx_mod_id(void);
 int maxdsm_get_tx_mod_id(void);
 void maxdsm_set_regmap(struct regmap *regmap);
 
 int maxdsm_update_feature_en_adc(int apply);
+
+int maxdsm_get_spk_state(void);
+void maxdsm_set_spk_state(int state);
+int maxdsm_set_pilot_signal_state(int on);
+uint32_t maxdsm_get_power_measurement(void);
 
 #ifdef USE_DSM_LOG
 #define LOG_BUFFER_ARRAY_SIZE 10

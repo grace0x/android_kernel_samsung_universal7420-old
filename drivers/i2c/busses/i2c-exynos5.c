@@ -262,6 +262,7 @@ struct exynos5_i2c {
 	unsigned int		desc_pointer;
 	unsigned int		batcher_read_addr;
 	unsigned int		secure_mode;
+	unsigned int		t_data_su_timing;
 };
 
 static const struct of_device_id exynos5_i2c_match[] = {
@@ -574,7 +575,12 @@ static int exynos5_i2c_set_timing(struct exynos5_i2c *i2c, int mode)
 	t_start_su = t_scl_l;
 	t_start_hd = t_scl_l;
 	t_stop_su = t_scl_l;
-	t_data_su = t_scl_l / 2;
+
+	if (i2c->t_data_su_timing)
+		t_data_su = (t_scl_l / 2) * i2c->t_data_su_timing;
+	else
+		t_data_su = t_scl_l / 2;
+
 	t_data_hd = t_scl_l / 2;
 	t_sr_release = clk_cycle;
 
@@ -1495,6 +1501,10 @@ static int exynos5_i2c_probe(struct platform_device *pdev)
 		i2c->cmd_buffer = HSI2C_BATCHER_INIT_CMD;
 	} else
 		i2c->support_hsi2c_batcher = 0;
+
+	/* TDATA_SU_FS/HS setting if needed */
+	if (of_property_read_u32(np, "t-data-su", &i2c->t_data_su_timing))
+		i2c->t_data_su_timing = 0;
 
 	if (of_get_property(np, "secure-mode", NULL)) {
 		i2c->secure_mode = 1;

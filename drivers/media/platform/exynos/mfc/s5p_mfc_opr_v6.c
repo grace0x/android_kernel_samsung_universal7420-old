@@ -994,7 +994,7 @@ int s5p_mfc_set_dec_stream_buffer(struct s5p_mfc_ctx *ctx, dma_addr_t buf_addr,
 	if (cpb_buf_size < strm_size + 4)
 		mfc_info_ctx("cpb_buf_size(%zu) < strm_size(0x%08x) + 4 bytes\n",
 				cpb_buf_size, strm_size);
-	if (ctx->state == MFCINST_GOT_INST && strm_size == 0)
+	if (strm_size == 0)
 		mfc_info_ctx("stream size is 0\n");
 
 	WRITEL(strm_size, S5P_FIMV_D_STREAM_DATA_SIZE);
@@ -2532,6 +2532,9 @@ static int s5p_mfc_init_decode(struct s5p_mfc_ctx *ctx)
 	if (dec->is_dual_dpb)
 		reg |= (0x1 << S5P_FIMV_D_OPT_DISPLAY_LINEAR_EN);
 
+	/* Parsing all including PPS */
+	reg |= (0x1 << S5P_FIMV_D_OPT_SPECIAL_PARSING_SHIFT);
+
 	WRITEL(reg, S5P_FIMV_D_DEC_OPTIONS);
 
 	if (ctx->codec_mode == S5P_FIMV_CODEC_FIMV1_DEC) {
@@ -3550,6 +3553,7 @@ void s5p_mfc_try_run(struct s5p_mfc_dev *dev)
 			ret = s5p_mfc_run_dec_last_frames(ctx);
 			break;
 		case MFCINST_RUNNING:
+		case MFCINST_SPECIAL_PARSING_NAL:
 			ret = s5p_mfc_run_dec_frame(ctx);
 			break;
 		case MFCINST_INIT:
@@ -3559,6 +3563,7 @@ void s5p_mfc_try_run(struct s5p_mfc_dev *dev)
 			ret = s5p_mfc_close_inst(ctx);
 			break;
 		case MFCINST_GOT_INST:
+		case MFCINST_SPECIAL_PARSING:
 			ret = s5p_mfc_run_init_dec(ctx);
 			break;
 		case MFCINST_HEAD_PARSED:

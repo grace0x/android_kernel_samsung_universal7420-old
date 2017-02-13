@@ -106,132 +106,450 @@ static inline void exynos_ufs_ctrl_phy_pwr(struct exynos_ufs *ufs, bool en)
 	writel(!!en, ufs->phy.reg_pmu);
 }
 
-void exynos_ufs_fmp_reg_dump(struct ufs_hba *hba)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+static struct exynos_ufs *ufs_host_backup[1];
+static int ufs_host_index = 0;
 
-	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": \t\tFMP REGISTER DUMP \n");
-	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": FMPRCTRL:	0x%08x\n", ufsp_readl(ufs, UFSPRCTRL));
-	dev_err(hba->dev, ": FMSPRSTAT:	0x%08x\n", ufsp_readl(ufs, UFSPRSTAT));
-	dev_err(hba->dev, ": FMPRSECURITY:	0x%08x\n", ufsp_readl(ufs, UFSPRSECURITY));
-	dev_err(hba->dev, ": FMPVERSION:	0x%08x\n", ufsp_readl(ufs, UFSPVERSION));
-	dev_err(hba->dev, ": FMPWCTRL:	0x%08x\n", ufsp_readl(ufs, UFSPWCTRL));
-	dev_err(hba->dev, ": FMPWSTAT:	0x%08x\n", ufsp_readl(ufs, UFSPWSTAT));
-	dev_err(hba->dev, ": FMPSBEGIN0:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN0));
-	dev_err(hba->dev, ": FMPSEND0:	0x%08x\n", ufsp_readl(ufs, UFSPSEND0));
-	dev_err(hba->dev, ": FMPSLUN0:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN0));
-	dev_err(hba->dev, ": FMPSCTRL0:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL0));
-	dev_err(hba->dev, ": FMPSBEGIN1:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN1));
-	dev_err(hba->dev, ": FMPSEND1:	0x%08x\n", ufsp_readl(ufs, UFSPSEND1));
-	dev_err(hba->dev, ": FMPSLUN1:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN1));
-	dev_err(hba->dev, ": FMPSCTRL1:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL1));
-	dev_err(hba->dev, ": FMPSBEGIN2:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN2));
-	dev_err(hba->dev, ": FMPSEND2:	0x%08x\n", ufsp_readl(ufs, UFSPSEND2));
-	dev_err(hba->dev, ": FMPSLUN2:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN2));
-	dev_err(hba->dev, ": FMPSCTRL2:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL2));
-	dev_err(hba->dev, ": FMPSBEGIN3:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN3));
-	dev_err(hba->dev, ": FMPSEND3:	0x%08x\n", ufsp_readl(ufs, UFSPSEND3));
-	dev_err(hba->dev, ": FMPSLUN3:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN3));
-	dev_err(hba->dev, ": FMPSCTRL3:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL3));
-	dev_err(hba->dev, ": FMPSEND4:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN4));
-	dev_err(hba->dev, ": FMPSLUN4:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN4));
-	dev_err(hba->dev, ": FMPSCTRL4:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL4));
-	dev_err(hba->dev, ": FMPSBEGIN5:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN5));
-	dev_err(hba->dev, ": FMPSEND5:	0x%08x\n", ufsp_readl(ufs, UFSPSEND5));
-	dev_err(hba->dev, ": FMPSLUN5:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN5));
-	dev_err(hba->dev, ": FMPSCTRL5:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL5));
-	dev_err(hba->dev, ": FMPSBEGIN6:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN6));
-	dev_err(hba->dev, ": FMPSEND6:	0x%08x\n", ufsp_readl(ufs, UFSPSEND6));
-	dev_err(hba->dev, ": FMPSLUN6:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN6));
-	dev_err(hba->dev, ": FMPSCTRL6:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL6));
-	dev_err(hba->dev, ": FMPSBEGIN7:	0x%08x\n", ufsp_readl(ufs, UFSPSBEGIN7));
-	dev_err(hba->dev, ": FMPSEND7:	0x%08x\n", ufsp_readl(ufs, UFSPSEND7));
-	dev_err(hba->dev, ": FMPSLUN7:	0x%08x\n", ufsp_readl(ufs, UFSPSLUN7));
-	dev_err(hba->dev, ": FMPSCTRL7:	0x%08x\n", ufsp_readl(ufs, UFSPSCTRL7));
-	dev_err(hba->dev, ": --------------------------------------------------- \n");
+static struct exynos_ufs_sfr_log ufs_cfg_log_sfr[] = {
+	{"STD HCI SFR"			,	LOG_STD_HCI_SFR,		0},
+
+	{"CAPABILITIES"			,	REG_CONTROLLER_CAPABILITIES,	0},
+	{"UFS VERSION"			,	REG_UFS_VERSION,		0},
+	{"PRODUCT ID"			,	REG_CONTROLLER_DEV_ID,		0},
+	{"MANUFACTURE ID"		,	REG_CONTROLLER_PROD_ID,		0},
+	{"INTERRUPT STATUS"		,	REG_INTERRUPT_STATUS,		0},
+	{"INTERRUPT ENABLE"		,	REG_INTERRUPT_ENABLE,		0},
+	{"CONTROLLER STATUS"		,	REG_CONTROLLER_STATUS,		0},
+	{"CONTROLLER ENABLE"		,	REG_CONTROLLER_ENABLE,		0},
+	{"UIC ERR PHY ADAPTER LAYER"	,	REG_UIC_ERROR_CODE_PHY_ADAPTER_LAYER,		0},
+	{"UIC ERR DATA LINK LAYER"	,	REG_UIC_ERROR_CODE_DATA_LINK_LAYER,		0},
+	{"UIC ERR NETWORK LATER"	,	REG_UIC_ERROR_CODE_NETWORK_LAYER,		0},
+	{"UIC ERR TRANSPORT LAYER"	,	REG_UIC_ERROR_CODE_TRANSPORT_LAYER,		0},
+	{"UIC ERR DME"			,	REG_UIC_ERROR_CODE_DME,		0},
+	{"UTP TRANSF REQ INT AGG CNTRL"	,	REG_UTP_TRANSFER_REQ_INT_AGG_CONTROL,		0},
+	{"UTP TRANSF REQ LIST BASE L"	,	REG_UTP_TRANSFER_REQ_LIST_BASE_L,		0},
+	{"UTP TRANSF REQ LIST BASE H"	,	REG_UTP_TRANSFER_REQ_LIST_BASE_H,		0},
+	{"UTP TRANSF REQ DOOR BELL"	,	REG_UTP_TRANSFER_REQ_DOOR_BELL,		0},
+	{"UTP TRANSF REQ LIST CLEAR"	,	REG_UTP_TRANSFER_REQ_LIST_CLEAR,		0},
+	{"UTP TRANSF REQ LIST RUN STOP"	,	REG_UTP_TRANSFER_REQ_LIST_RUN_STOP,		0},
+	{"UTP TASK REQ LIST BASE L"	,	REG_UTP_TASK_REQ_LIST_BASE_L,		0},
+	{"UTP TASK REQ LIST BASE H"	,	REG_UTP_TASK_REQ_LIST_BASE_H,		0},
+	{"UTP TASK REQ DOOR BELL"	,	REG_UTP_TASK_REQ_DOOR_BELL,		0},
+	{"UTP TASK REQ LIST CLEAR"	,	REG_UTP_TASK_REQ_LIST_CLEAR,		0},
+	{"UTP TASK REQ LIST RUN STOP"	,	REG_UTP_TASK_REQ_LIST_RUN_STOP,		0},
+	{"UIC COMMAND"			,	REG_UIC_COMMAND,		0},
+	{"UIC COMMAND ARG1"		,	REG_UIC_COMMAND_ARG_1,		0},
+	{"UIC COMMAND ARG2"		,	REG_UIC_COMMAND_ARG_2,		0},
+	{"UIC COMMAND ARG3"		,	REG_UIC_COMMAND_ARG_3,		0},
+
+	{"VS HCI SFR"			,	LOG_VS_HCI_SFR,			0},
+
+	{"TXPRDT ENTRY SIZE"		,	HCI_TXPRDT_ENTRY_SIZE,		0},
+	{"RXPRDT ENTRY SIZE"		,	HCI_RXPRDT_ENTRY_SIZE,		0},
+	{"1US TO CNT VAL"		,	HCI_1US_TO_CNT_VAL,		0},
+	{"INVALID UPIU CTRL"		,	HCI_INVALID_UPIU_CTRL,		0},
+	{"INVALID UPIU BADDR"		,	HCI_INVALID_UPIU_BADDR,		0},
+	{"INVALID UPIU UBADDR"		,	HCI_INVALID_UPIU_UBADDR,		0},
+	{"INVALID UTMR OFFSET ADDR"	,	HCI_INVALID_UTMR_OFFSET_ADDR,		0},
+	{"INVALID UTR OFFSET ADDR"	,	HCI_INVALID_UTR_OFFSET_ADDR,		0},
+	{"INVALID DIN OFFSET ADDR"	,	HCI_INVALID_DIN_OFFSET_ADDR,		0},
+	{"DBR TIMER CONFIG"		,	HCI_DBR_TIMER_CONFIG,		0},
+	{"DBR TIMER STATUS"		,	HCI_DBR_TIMER_STATUS,		0},
+	{"VENDOR SPECIFIC IS"		,	HCI_VENDOR_SPECIFIC_IS,		0},
+	{"VENDOR SPECIFIC IE"		,	HCI_VENDOR_SPECIFIC_IE,		0},
+	{"UTRL NEXUS TYPE"		,	HCI_UTRL_NEXUS_TYPE,		0},
+	{"UTMRL NEXUS TYPE"		,	HCI_UTMRL_NEXUS_TYPE,		0},
+	{"E2EFC CTRL"			,	HCI_E2EFC_CTRL,		0},
+	{"SW RST"			,	HCI_SW_RST,		0},
+	{"LINK VERSION"			,	HCI_LINK_VERSION,		0},
+	{"IDLE TIMER CONFIG"		,	HCI_IDLE_TIMER_CONFIG,		0},
+	{"RX UPIU MATCH ERROR CODE"	,	HCI_RX_UPIU_MATCH_ERROR_CODE,		0},
+	{"DATA REORDER"			,	HCI_DATA_REORDER,		0},
+	{"MAX DOUT DATA SIZE"		,	HCI_MAX_DOUT_DATA_SIZE,		0},
+	{"UNIPRO APB CLK CTRL"		,	HCI_UNIPRO_APB_CLK_CTRL,		0},
+	{"AXIDMA RWDATA BURST LEN"	,	HCI_AXIDMA_RWDATA_BURST_LEN,		0},
+	{"GPIO OUT"			,	HCI_GPIO_OUT,		0},
+	{"WRITE DMA CTRL"		,	HCI_WRITE_DMA_CTRL,		0},
+	{"ERROR EN PA LAYER"		,	HCI_ERROR_EN_PA_LAYER,		0},
+	{"ERROR EN DL LAYER"		,	HCI_ERROR_EN_DL_LAYER,		0},
+	{"ERROR EN N LAYER"		,	HCI_ERROR_EN_N_LAYER,		0},
+	{"ERROR EN T LAYER"		,	HCI_ERROR_EN_T_LAYER,		0},
+	{"ERROR EN DME LAYER"		,	HCI_ERROR_EN_DME_LAYER,		0},
+	{"REQ HOLD EN"			,	HCI_REQ_HOLD_EN,		0},
+	{"CLKSTOP CTRL"			,	HCI_CLKSTOP_CTRL,		0},
+	{"FORCE HCS"			,	HCI_FORCE_HCS,		0},
+	{"FSM MONITOR"			,	HCI_FSM_MONITOR,		0},
+	{"PRDT HIT RATIO"		,	HCI_PRDT_HIT_RATIO,		0},
+	{"DMA0 MONITOR STATE"		,	HCI_DMA0_MONITOR_STATE,		0},
+	{"DMA0 MONITOR CNT"		,	HCI_DMA0_MONITOR_CNT,		0},
+	{"DMA1 MONITOR STATE"		,	HCI_DMA1_MONITOR_STATE,		0},
+	{"DMA1 MONITOR CNT"		,	HCI_DMA1_MONITOR_CNT,		0},
+
+	{"FMP SFR"			,	LOG_FMP_SFR,			0},
+
+	{"UFSPRCTRL"			,	UFSPRCTRL,			0},
+	{"UFSPRSTAT"			,	UFSPRSTAT,			0},
+	{"UFSPRSECURITY"		,	UFSPRSECURITY,			0},
+	{"UFSPVERSION"			,	UFSPVERSION,			0},
+	{"UFSPWCTRL"			,	UFSPWCTRL,			0},
+	{"UFSPWSTAT"			,	UFSPWSTAT,			0},
+	{"UFSPSBEGIN0"			,	UFSPSBEGIN0,			0},
+	{"UFSPSEND0"			,	UFSPSEND0,			0},
+	{"UFSPSLUN0"			,	UFSPSLUN0,			0},
+	{"UFSPSCTRL0"			,	UFSPSCTRL0,			0},
+	{"UFSPSBEGIN1"			,	UFSPSBEGIN1,			0},
+	{"UFSPSEND1"			,	UFSPSEND1,			0},
+	{"UFSPSLUN1"			,	UFSPSLUN1,			0},
+	{"UFSPSCTRL1"			,	UFSPSCTRL1,			0},
+	{"UFSPSBEGIN2"			,	UFSPSBEGIN2,			0},
+	{"UFSPSEND2"			,	UFSPSEND2,			0},
+	{"UFSPSLUN2"			,	UFSPSLUN2,			0},
+	{"UFSPSCTRL2"			,	UFSPSCTRL2,			0},
+	{"UFSPSBEGIN3"			,	UFSPSBEGIN3,			0},
+	{"UFSPSEND3"			,	UFSPSEND3,			0},
+	{"UFSPSLUN3"			,	UFSPSLUN3,			0},
+	{"UFSPSCTRL3"			,	UFSPSCTRL3,			0},
+	{"UFSPSBEGIN4"			,	UFSPSBEGIN4,			0},
+	{"UFSPSLUN4"			,	UFSPSLUN4,			0},
+	{"UFSPSCTRL4"			,	UFSPSCTRL4,			0},
+	{"UFSPSBEGIN5"			,	UFSPSBEGIN5,			0},
+	{"UFSPSEND5"			,	UFSPSEND5,			0},
+	{"UFSPSLUN5"			,	UFSPSLUN5,			0},
+	{"UFSPSCTRL5"			,	UFSPSCTRL5,			0},
+	{"UFSPSBEGIN6"			,	UFSPSBEGIN6,			0},
+	{"UFSPSEND6"			,	UFSPSEND6,			0},
+	{"UFSPSLUN6"			,	UFSPSLUN6,			0},
+	{"UFSPSCTRL6"			,	UFSPSCTRL6,			0},
+	{"UFSPSBEGIN7"			,	UFSPSBEGIN7,			0},
+	{"UFSPSEND7"			,	UFSPSEND7,			0},
+	{"UFSPSLUN7"			,	UFSPSLUN7,			0},
+	{"UFSPSCTRL7"			,	UFSPSCTRL7,			0},
+
+	{"UNIPRO SFR"			,	LOG_UNIPRO_SFR,			0},
+
+	{"COMP_VERSION"			,	UNIP_COMP_VERSION			,	0},
+	{"COMP_INFO"			,	UNIP_COMP_INFO				,	0},
+	{"COMP_RESET"			,	UNIP_COMP_RESET				,	0},
+	{"DME_POWERON_REQ"		,	UNIP_DME_POWERON_REQ			,	0},
+	{"DME_POWERON_CNF_RESULT"	,	UNIP_DME_POWERON_CNF_RESULT		,	0},
+	{"DME_POWEROFF_REQ"		,	UNIP_DME_POWEROFF_REQ			,	0},
+	{"DME_POWEROFF_CNF_RESULT"	,	UNIP_DME_POWEROFF_CNF_RESULT		,	0},
+	{"DME_RESET_REQ"		,	UNIP_DME_RESET_REQ			,	0},
+	{"DME_RESET_REQ_LEVEL"		,	UNIP_DME_RESET_REQ_LEVEL		,	0},
+	{"DME_ENABLE_REQ"		,	UNIP_DME_ENABLE_REQ			,	0},
+	{"DME_ENABLE_CNF_RESULT"	,	UNIP_DME_ENABLE_CNF_RESULT		,	0},
+	{"DME_ENDPOINTRESET_REQ"	,	UNIP_DME_ENDPOINTRESET_REQ		,	0},
+	{"DME_ENDPOINTRESET_CNF_RESULT"	,	UNIP_DME_ENDPOINTRESET_CNF_RESULT	,	0},
+	{"DME_LINKSTARTUP_REQ"		,	UNIP_DME_LINKSTARTUP_REQ		,	0},
+	{"DME_LINKSTARTUP_CNF_RESULT"	,	UNIP_DME_LINKSTARTUP_CNF_RESULT		,	0},
+	{"DME_HIBERN8_ENTER_REQ"	,	UNIP_DME_HIBERN8_ENTER_REQ		,	0},
+	{"DME_HIBERN8_ENTER_CNF_RESULT"	,	UNIP_DME_HIBERN8_ENTER_CNF_RESULT	,	0},
+	{"DME_HIBERN8_ENTER_IND_RESULT"	,	UNIP_DME_HIBERN8_ENTER_IND_RESULT	,	0},
+	{"DME_HIBERN8_EXIT_REQ"		,	UNIP_DME_HIBERN8_EXIT_REQ		,	0},
+	{"DME_HIBERN8_EXIT_CNF_RESULT"	,	UNIP_DME_HIBERN8_EXIT_CNF_RESULT	,	0},
+	{"DME_HIBERN8_EXIT_IND_RESULT"	,	UNIP_DME_HIBERN8_EXIT_IND_RESULT	,	0},
+	{"DME_PWR_REQ"			,	UNIP_DME_PWR_REQ			,	0},
+	{"DME_PWR_REQ_POWERMODE	"	,	UNIP_DME_PWR_REQ_POWERMODE		,	0},
+	{"DME_PWR_REQ_LOCALL2TIMER0"	,	UNIP_DME_PWR_REQ_LOCALL2TIMER0		,	0},
+	{"DME_PWR_REQ_LOCALL2TIMER1"	,	UNIP_DME_PWR_REQ_LOCALL2TIMER1		,	0},
+	{"DME_PWR_REQ_LOCALL2TIMER2"	,	UNIP_DME_PWR_REQ_LOCALL2TIMER2		,	0},
+	{"DME_PWR_REQ_REMOTEL2TIMER0"	,	UNIP_DME_PWR_REQ_REMOTEL2TIMER0		,	0},
+	{"DME_PWR_REQ_REMOTEL2TIMER1"	,	UNIP_DME_PWR_REQ_REMOTEL2TIMER1		,	0},
+	{"DME_PWR_REQ_REMOTEL2TIMER2"	,	UNIP_DME_PWR_REQ_REMOTEL2TIMER2		,	0},
+	{"DME_PWR_CNF_RESULT"		,	UNIP_DME_PWR_CNF_RESULT			,	0},
+	{"DME_PWR_IND_RESULT"		,	UNIP_DME_PWR_IND_RESULT			,	0},
+	{"DME_TEST_MODE_REQ"		,	UNIP_DME_TEST_MODE_REQ			,	0},
+	{"DME_TEST_MODE_CNF_RESULT"	,	UNIP_DME_TEST_MODE_CNF_RESULT		,	0},
+	{"DME_ERROR_IND_LAYER"		,	UNIP_DME_ERROR_IND_LAYER		,	0},
+	{"DME_ERROR_IND_ERRCODE"	,	UNIP_DME_ERROR_IND_ERRCODE		,	0},
+	{"DME_PACP_CNFBIT"		,	UNIP_DME_PACP_CNFBIT			,	0},
+	{"DME_DL_FRAME_IND"		,	UNIP_DME_DL_FRAME_IND			,	0},
+	{"DME_INTR_STATUS"		,	UNIP_DME_INTR_STATUS			,	0},
+	{"DME_INTR_ENABLE"		,	UNIP_DME_INTR_ENABLE			,	0},
+	{"DME_GETSET_ADDR"		,	UNIP_DME_GETSET_ADDR			,	0},
+	{"DME_GETSET_WDATA"		,	UNIP_DME_GETSET_WDATA			,	0},
+	{"DME_GETSET_RDATA"		,	UNIP_DME_GETSET_RDATA			,	0},
+	{"DME_GETSET_CONTROL"		,	UNIP_DME_GETSET_CONTROL			,	0},
+	{"DME_GETSET_RESULT"		,	UNIP_DME_GETSET_RESULT			,	0},
+	{"DME_PEER_GETSET_ADDR"		,	UNIP_DME_PEER_GETSET_ADDR		,	0},
+	{"DME_PEER_GETSET_WDATA"	,	UNIP_DME_PEER_GETSET_WDATA		,	0},
+	{"DME_PEER_GETSET_RDATA"	,	UNIP_DME_PEER_GETSET_RDATA		,	0},
+	{"DME_PEER_GETSET_CONTROL"	,	UNIP_DME_PEER_GETSET_CONTROL		,	0},
+	{"DME_PEER_GETSET_RESULT"	,	UNIP_DME_PEER_GETSET_RESULT		,	0},
+	{"DME_DIRECT_GETSET_BASE"	,	UNIP_DME_DIRECT_GETSET_BASE		,	0},
+	{"DME_DIRECT_GETSET_ERR_ADDR"	,	UNIP_DME_DIRECT_GETSET_ERR_ADDR		,	0},
+	{"DME_DIRECT_GETSET_ERR_CODE"	,	UNIP_DME_DIRECT_GETSET_ERR_CODE		,	0},
+	{"DME_INTR_ERROR_CODE"		,	UNIP_DME_INTR_ERROR_CODE		,	0},
+	{"DBG_DME_CTRL_STATE"		,	UNIP_DBG_DME_CTRL_STATE			,	0},
+	{"DBG_FORCE_DME_CTRL_STATE"	,	UNIP_DBG_FORCE_DME_CTRL_STATE		,	0},
+	{"DBG_PA_CTRLSTATE"		,	UNIP_DBG_PA_CTRLSTATE			,	0},
+	{"DBG_PA_TX_STATE"		,	UNIP_DBG_PA_TX_STATE			,	0},
+
+	{"PMA SFR"			,	LOG_PMA_SFR,			0},
+
+	{},
+};
+
+static struct exynos_ufs_attr_log ufs_cfg_log_attr[] = {
+	/* PA Standard */
+	{UIC_ARG_MIB(0x1560),	0, 0},
+	{UIC_ARG_MIB(0x1561),	0, 0},
+	{UIC_ARG_MIB(0x1568),	0, 0},
+	{UIC_ARG_MIB(0x156A),	0, 0},
+	{UIC_ARG_MIB(0x1571),	0, 0},
+	{UIC_ARG_MIB(0x1580),	0, 0},
+	{UIC_ARG_MIB(0x1581),	0, 0},
+	{UIC_ARG_MIB(0x1583),	0, 0},
+	{UIC_ARG_MIB(0x15A4),	0, 0},
+	{UIC_ARG_MIB(0x15A7),	0, 0},
+	{UIC_ARG_MIB(0x15A8),	0, 0},
+	{UIC_ARG_MIB(0x15AA),	0, 0},
+	{UIC_ARG_MIB(0x15C0),	0, 0},
+	{UIC_ARG_MIB(0x15C1),	0, 0},
+
+	/* PA Debug */
+	{UIC_ARG_MIB(0x9556),	0, 0},
+
+	/* DL Debug */
+	{UIC_ARG_MIB(0xA000),	0, 0},
+	{UIC_ARG_MIB(0xA003),	0, 0},
+	{UIC_ARG_MIB(0xA004),	0, 0},
+	{UIC_ARG_MIB(0xA005),	0, 0},
+	{UIC_ARG_MIB(0xA006),	0, 0},
+	{UIC_ARG_MIB(0xA010),	0, 0},
+	{UIC_ARG_MIB(0xA028),	0, 0},
+	{UIC_ARG_MIB(0xA029),	0, 0},
+	{UIC_ARG_MIB(0xA02A),	0, 0},
+	{UIC_ARG_MIB(0xA064),	0, 0},
+	{UIC_ARG_MIB(0xA065),	0, 0},
+	{UIC_ARG_MIB(0xA066),	0, 0},
+
+	/* NL Debug */
+	{UIC_ARG_MIB(0xB011),	0, 0},
+
+	/* TL Debug */
+	{UIC_ARG_MIB(0xC026),	0, 0},
+
+	/* PCS */
+	{UIC_ARG_MIB_SEL(0x0021, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0022, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0023, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0024, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0028, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0029, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002a, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002b, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002c, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002d, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0033, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0035, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0036, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0041, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a1, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a2, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a3, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a4, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a7, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00c1, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x029b, 0), 0, 0},
+	{UIC_ARG_MIB_SEL(0x035d, 0), 0, 0},
+
+	{UIC_ARG_MIB_SEL(0x0021, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0022, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0023, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0024, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0028, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0029, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002a, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002b, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002c, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x002d, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0033, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0035, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0036, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x0041, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a1, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a2, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a3, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a4, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00a7, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x00c1, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x029b, 1), 0, 0},
+	{UIC_ARG_MIB_SEL(0x035d, 1), 0, 0},
+
+	{},
+};
+
+static void exynos_ufs_get_misc(struct ufs_hba *hba)
+ {
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_ufs_clk_info *clki;
+	struct list_head *head = &ufs->debug.misc.clk_list_head;
+
+	list_for_each_entry(clki, head, list) {
+		if (!IS_ERR_OR_NULL(clki->clk))
+			clki->freq = clk_get_rate(clki->clk);
+	}
+	ufs->debug.misc.isolation = readl(ufs->phy.reg_pmu);
 }
 
-void exynos_ufs_hci_reg_dump(struct ufs_hba *hba)
+static void exynos_ufs_get_sfr(struct ufs_hba *hba)
 {
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_ufs_sfr_log* cfg = ufs->debug.sfr;
+	int sel_api = 0;
+
+	while(cfg) {
+		if (!cfg->name)
+			break;
+
+		if (cfg->offset >= LOG_STD_HCI_SFR) {
+			/* Select an API to get SFRs */
+			sel_api = cfg->offset;
+		} else {
+			/* Fetch value */
+			if (sel_api == LOG_STD_HCI_SFR)
+				cfg->val = ufshcd_readl(hba, cfg->offset);
+			else if (sel_api == LOG_VS_HCI_SFR)
+				cfg->val = hci_readl(ufs, cfg->offset);
+			else if (sel_api == LOG_FMP_SFR)
+				cfg->val = ufsp_readl(ufs, cfg->offset);
+			else if (sel_api == LOG_UNIPRO_SFR)
+				cfg->val = unipro_readl(ufs, cfg->offset);
+			else if (sel_api == LOG_PMA_SFR)
+				cfg->val = phy_pma_readl(ufs, cfg->offset);
+			else
+				cfg->val = 0xFFFFFFFF;
+		}
+
+		/* Next SFR */
+		cfg++;
+	}
+}
+
+static void exynos_ufs_get_attr(struct ufs_hba *hba)
+{
+	u32 i;
+	u32 intr_enable;
+	struct exynos_ufs_attr_log* cfg = ufs_cfg_log_attr;
+
+	/* Disable and backup interrupts */
+	intr_enable = ufshcd_readl(hba, REG_INTERRUPT_ENABLE);
+	ufshcd_writel(hba, 0, REG_INTERRUPT_ENABLE);
+
+	while(cfg) {
+		if (cfg->offset == 0)
+			break;
+
+		/* Send DME_GET */
+		ufshcd_writel(hba, cfg->offset, REG_UIC_COMMAND_ARG_1);
+		ufshcd_writel(hba, UIC_CMD_DME_GET, REG_UIC_COMMAND);
+
+		i = 0;
+		while(!(ufshcd_readl(hba, REG_INTERRUPT_STATUS) &
+					UIC_COMMAND_COMPL)) {
+			if (i++ > 20000) {
+				dev_err(hba->dev,
+					"Failed to fetch a value of %x",
+					cfg->offset);
+				goto out;
+			}
+		}
+		
+
+		/* Clear UIC command completion */
+		ufshcd_writel(hba, UIC_COMMAND_COMPL, REG_INTERRUPT_STATUS);
+
+		/* Fetch result and value */
+		cfg->res = ufshcd_readl(hba, REG_UIC_COMMAND_ARG_2 &
+				MASK_UIC_COMMAND_RESULT);
+		cfg->val = ufshcd_readl(hba, REG_UIC_COMMAND_ARG_3);
+
+		/* Next attribute */
+		cfg++;
+	}
+
+out:
+	/* Restore and enable interrupts */
+	ufshcd_writel(hba, intr_enable, REG_INTERRUPT_ENABLE);
+}
+
+static void exynos_ufs_misc_dump(struct ufs_hba *hba)
+{
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_ufs_misc_log* cfg = &ufs->debug.misc;
+	struct exynos_ufs_clk_info *clki;
+	struct list_head *head = &cfg->clk_list_head;
+
 	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": \t\tHCI STANDARD REGISTER DUMP\n");
+	dev_err(hba->dev, ": \t\tMISC DUMP\n");
 	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": CAPABILITIES:			0x%08x\n", ufshcd_readl(hba, REG_CONTROLLER_CAPABILITIES));
-	dev_err(hba->dev, ": UFS VERSION:			0x%08x\n", ufshcd_readl(hba, REG_UFS_VERSION));
-	dev_err(hba->dev, ": PRODUCT ID:			0x%08x\n", ufshcd_readl(hba, REG_CONTROLLER_DEV_ID));
-	dev_err(hba->dev, ": MANUFACTURE ID:		0x%08x\n", ufshcd_readl(hba, REG_CONTROLLER_PROD_ID));
-	dev_err(hba->dev, ": INTERRUPT STATUS:		0x%08x\n", ufshcd_readl(hba, REG_INTERRUPT_STATUS));
-	dev_err(hba->dev, ": INTERRUPT ENABLE:		0x%08x\n", ufshcd_readl(hba, REG_INTERRUPT_ENABLE));
-	dev_err(hba->dev, ": CONTROLLER STATUS:		0x%08x\n", ufshcd_readl(hba, REG_CONTROLLER_STATUS));
-	dev_err(hba->dev, ": CONTROLLER ENABLE:		0x%08x\n", ufshcd_readl(hba, REG_CONTROLLER_ENABLE));
-	dev_err(hba->dev, ": UIC ERR PHY ADAPTER LAYER:	0x%08x\n", ufshcd_readl(hba, REG_UIC_ERROR_CODE_PHY_ADAPTER_LAYER));
-	dev_err(hba->dev, ": UIC ERR DATA LINK LAYER:	0x%08x\n", ufshcd_readl(hba, REG_UIC_ERROR_CODE_DATA_LINK_LAYER));
-	dev_err(hba->dev, ": UIC ERR NETWORK LATER:	0x%08x\n", ufshcd_readl(hba, REG_UIC_ERROR_CODE_NETWORK_LAYER));
-	dev_err(hba->dev, ": UIC ERR TRANSPORT LAYER:	0x%08x\n", ufshcd_readl(hba, REG_UIC_ERROR_CODE_TRANSPORT_LAYER));
-	dev_err(hba->dev, ": UIC ERR DME:			0x%08x\n", ufshcd_readl(hba, REG_UIC_ERROR_CODE_DME));
-	dev_err(hba->dev, ": UTP TRANSF REQ INT AGG CNTRL:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_INT_AGG_CONTROL));
-	dev_err(hba->dev, ": UTP TRANSF REQ LIST BASE L:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_BASE_L));
-	dev_err(hba->dev, ": UTP TRANSF REQ LIST BASE H:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_BASE_H));
-	dev_err(hba->dev, ": UTP TRANSF REQ DOOR BELL:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL));
-	dev_err(hba->dev, ": UTP TRANSF REQ LIST CLEAR:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_CLEAR));
-	dev_err(hba->dev, ": UTP TRANSF REQ LIST RUN STOP:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_LIST_RUN_STOP));
-	dev_err(hba->dev, ": UTP TASK REQ LIST BASE L:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TASK_REQ_LIST_BASE_L));
-	dev_err(hba->dev, ": UTP TASK REQ LIST BASE H:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TASK_REQ_LIST_BASE_H));
-	dev_err(hba->dev, ": UTP TASK REQ DOOR BELL:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TASK_REQ_DOOR_BELL));
-	dev_err(hba->dev, ": UTP TASK REQ LIST CLEAR:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TASK_REQ_LIST_CLEAR));
-	dev_err(hba->dev, ": UTP TASK REQ LIST RUN STOP:	0x%08x\n", ufshcd_readl(hba, REG_UTP_TASK_REQ_LIST_RUN_STOP));
-	dev_err(hba->dev, ": UIC COMMAND:			0x%08x\n", ufshcd_readl(hba, REG_UIC_COMMAND));
-	dev_err(hba->dev, ": UIC COMMAND ARG1:		0x%08x\n", ufshcd_readl(hba, REG_UIC_COMMAND_ARG_1));
-	dev_err(hba->dev, ": UIC COMMAND ARG2:		0x%08x\n", ufshcd_readl(hba, REG_UIC_COMMAND_ARG_2));
-	dev_err(hba->dev, ": UIC COMMAND ARG3:		0x%08x\n", ufshcd_readl(hba, REG_UIC_COMMAND_ARG_3));
+
+	list_for_each_entry(clki, head, list) {
+		if (!IS_ERR_OR_NULL(clki->clk)) {
+			dev_err(hba->dev, "%s: %d\n",
+					clki->name, clki->freq);
+		}
+	}
+	dev_err(hba->dev, "iso: %d\n", ufs->debug.misc.isolation);
+}
+
+static void exynos_ufs_sfr_dump(struct ufs_hba *hba)
+{
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_ufs_sfr_log* cfg = ufs->debug.sfr;
+
 	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": \t\tVENDOR SPECIFIC REGISTER DUMP\n");
+	dev_err(hba->dev, ": \t\tREGISTER DUMP\n");
 	dev_err(hba->dev, ": --------------------------------------------------- \n");
-	dev_err(hba->dev, ": TXPRDT ENTRY SIZE:		0x%08x\n", hci_readl(ufs, HCI_TXPRDT_ENTRY_SIZE));
-	dev_err(hba->dev, ": RXPRDT ENTRY SIZE:		0x%08x\n", hci_readl(ufs, HCI_RXPRDT_ENTRY_SIZE));
-	dev_err(hba->dev, ": TO CNT DIV VAL:		0x%08x\n", hci_readl(ufs, HCI_TO_CNT_DIV_VAL));
-	dev_err(hba->dev, ": 1US TO CNT VAL:		0x%08x\n", hci_readl(ufs, HCI_1US_TO_CNT_VAL));
-	dev_err(hba->dev, ": INVALID UPIU CTRL:		0x%08x\n", hci_readl(ufs, HCI_INVALID_UPIU_CTRL));
-	dev_err(hba->dev, ": INVALID UPIU BADDR:		0x%08x\n", hci_readl(ufs, HCI_INVALID_UPIU_BADDR));
-	dev_err(hba->dev, ": INVALID UPIU UBADDR:		0x%08x\n", hci_readl(ufs, HCI_INVALID_UPIU_UBADDR));
-	dev_err(hba->dev, ": INVALID UTMR OFFSET ADDR:	0x%08x\n", hci_readl(ufs, HCI_INVALID_UTMR_OFFSET_ADDR));
-	dev_err(hba->dev, ": INVALID UTR OFFSET ADDR:	0x%08x\n", hci_readl(ufs, HCI_INVALID_UTR_OFFSET_ADDR));
-	dev_err(hba->dev, ": INVALID DIN OFFSET ADDR:	0x%08x\n", hci_readl(ufs, HCI_INVALID_DIN_OFFSET_ADDR));
-	dev_err(hba->dev, ": DBR TIMER CONFIG:		0x%08x\n", hci_readl(ufs, HCI_DBR_TIMER_CONFIG));
-	dev_err(hba->dev, ": DBR TIMER STATUS:		0x%08x\n", hci_readl(ufs, HCI_DBR_TIMER_STATUS));
-	dev_err(hba->dev, ": VENDOR SPECIFIC IS:		0x%08x\n", hci_readl(ufs, HCI_VENDOR_SPECIFIC_IS));
-	dev_err(hba->dev, ": VENDOR SPECIFIC IE:		0x%08x\n", hci_readl(ufs, HCI_VENDOR_SPECIFIC_IE));
-	dev_err(hba->dev, ": UTRL NEXUS TYPE:		0x%08x\n", hci_readl(ufs, HCI_UTRL_NEXUS_TYPE));
-	dev_err(hba->dev, ": UTMRL NEXUS TYPE:		0x%08x\n", hci_readl(ufs, HCI_UTMRL_NEXUS_TYPE));
-	dev_err(hba->dev, ": E2EFC CTRL:			0x%08x\n", hci_readl(ufs, HCI_E2EFC_CTRL));
-	dev_err(hba->dev, ": SW RST:			0x%08x\n", hci_readl(ufs, HCI_SW_RST));
-	dev_err(hba->dev, ": LINK VERSION:			0x%08x\n", hci_readl(ufs, HCI_LINK_VERSION));
-	dev_err(hba->dev, ": IDLE TIMER CONFIG:		0x%08x\n", hci_readl(ufs, HCI_IDLE_TIMER_CONFIG));
-	dev_err(hba->dev, ": RX UPIU MATCH ERROR CODE:	0x%08x\n", hci_readl(ufs, HCI_RX_UPIU_MATCH_ERROR_CODE));
-	dev_err(hba->dev, ": DATA REORDER:			0x%08x\n", hci_readl(ufs, HCI_DATA_REORDER));
-	dev_err(hba->dev, ": MAX DOUT DATA SIZE:		0x%08x\n", hci_readl(ufs, HCI_MAX_DOUT_DATA_SIZE));
-	dev_err(hba->dev, ": UNIPRO APB CLK CTRL:		0x%08x\n", hci_readl(ufs, HCI_UNIPRO_APB_CLK_CTRL));
-	dev_err(hba->dev, ": AXIDMA RWDATA BURST LEN:	0x%08x\n", hci_readl(ufs, HCI_AXIDMA_RWDATA_BURST_LEN));
-	dev_err(hba->dev, ": GPIO OUT:			0x%08x\n", hci_readl(ufs, HCI_GPIO_OUT));
-	dev_err(hba->dev, ": WRITE DMA CTRL:		0x%08x\n", hci_readl(ufs, HCI_WRITE_DMA_CTRL));
-	dev_err(hba->dev, ": ERROR EN PA LAYER:		0x%08x\n", hci_readl(ufs, HCI_ERROR_EN_PA_LAYER));
-	dev_err(hba->dev, ": ERROR EN DL LAYER:		0x%08x\n", hci_readl(ufs, HCI_ERROR_EN_DL_LAYER));
-	dev_err(hba->dev, ": ERROR EN N LAYER:		0x%08x\n", hci_readl(ufs, HCI_ERROR_EN_N_LAYER));
-	dev_err(hba->dev, ": ERROR EN T LAYER:		0x%08x\n", hci_readl(ufs, HCI_ERROR_EN_T_LAYER));
-	dev_err(hba->dev, ": ERROR EN DME LAYER:		0x%08x\n", hci_readl(ufs, HCI_ERROR_EN_DME_LAYER));
-	dev_err(hba->dev, ": REQ HOLD EN:			0x%08x\n", hci_readl(ufs, HCI_REQ_HOLD_EN));
-	dev_err(hba->dev, ": CLKSTOP CTRL:			0x%08x\n", hci_readl(ufs, HCI_CLKSTOP_CTRL));
-	dev_err(hba->dev, ": FORCE HCS:			0x%08x\n", hci_readl(ufs, HCI_FORCE_HCS));
-	dev_err(hba->dev, ": FSM MONITOR:			0x%08x\n", hci_readl(ufs, HCI_FSM_MONITOR));
-	dev_err(hba->dev, ": PRDT HIT RATIO:		0x%08x\n", hci_readl(ufs, HCI_PRDT_HIT_RATIO));
-	dev_err(hba->dev, ": DMA0 MONITOR STATE:		0x%08x\n", hci_readl(ufs, HCI_DMA0_MONITOR_STATE));
-	dev_err(hba->dev, ": DMA0 MONITOR CNT:		0x%08x\n", hci_readl(ufs, HCI_DMA0_MONITOR_CNT));
-	dev_err(hba->dev, ": DMA1 MONITOR STATE:		0x%08x\n", hci_readl(ufs, HCI_DMA1_MONITOR_STATE));
-	dev_err(hba->dev, ": DMA1 MONITOR CNT:		0x%08x\n", hci_readl(ufs, HCI_DMA1_MONITOR_CNT));
+
+	while(cfg) {
+		if (!cfg->name)
+			break;
+
+		/* Dump */
+		dev_err(hba->dev, ": %s(0x%04x):\t\t\t\t0x%08x\n",
+				cfg->name, cfg->offset, cfg->val);
+
+		/* Next SFR */
+		cfg++;
+	}
+}
+
+static void exynos_ufs_attr_dump(struct ufs_hba *hba)
+{
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_ufs_attr_log* cfg = ufs->debug.attr;
+
 	dev_err(hba->dev, ": --------------------------------------------------- \n");
+	dev_err(hba->dev, ": \t\tATTRIBUTE DUMP\n");
+	dev_err(hba->dev, ": --------------------------------------------------- \n");
+
+	while(cfg) {
+		if (!cfg->offset)
+			break;
+
+		/* Dump */
+		dev_err(hba->dev, ": 0x%04x:\t\t0x%08x\t\t0x%08x\n",
+				cfg->offset, cfg->val, cfg->res);
+
+		/* Next SFR */
+		cfg++;
+	}
+}
+
+static void exynos_ufs_get_debug_info(struct ufs_hba *hba)
+{
+
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+
+	if (!(ufs->misc_flags & EXYNOS_UFS_MISC_TOGGLE_LOG))
+		return;
+ 
+	exynos_ufs_get_sfr(hba);
+	exynos_ufs_get_attr(hba);
+	exynos_ufs_get_misc(hba);
+ 
+	ufs->misc_flags &= ~(EXYNOS_UFS_MISC_TOGGLE_LOG);
 }
 
 static inline const
@@ -472,6 +790,9 @@ static void exynos_ufs_config_phy_cap_attr(struct exynos_ufs *ufs)
 			ufshcd_dme_set(hba,
 				UIC_ARG_MIB_SEL(RX_ADV_GRANULARITY_CAP, i), 0);
 
+			ufshcd_dme_set(hba,
+				UIC_ARG_MIB_SEL(TX_ADV_GRANULARITY_CAP, i), 0);
+
 			if (ufs->rx_min_actv_time_cap)
 				ufshcd_dme_set(hba,
 					UIC_ARG_MIB_SEL(RX_MIN_ACTIVATETIME_CAP, i),
@@ -481,6 +802,11 @@ static void exynos_ufs_config_phy_cap_attr(struct exynos_ufs *ufs)
 				ufshcd_dme_set(hba,
 					UIC_ARG_MIB_SEL(RX_HIBERN8TIME_CAP, i),
 					ufs->rx_hibern8_time_cap);
+
+			if (ufs->tx_hibern8_time_cap)
+				ufshcd_dme_set(hba,
+					UIC_ARG_MIB_SEL(TX_HIBERN8TIME_CAP, i),
+					ufs->tx_hibern8_time_cap);
 		}
 	} else if (ufs->rx_adv_fine_gran_sup_en == 1) {
 		for_each_ufs_lane(ufs, i) {
@@ -558,7 +884,8 @@ static void exynos_ufs_config_smu(struct exynos_ufs *ufs)
 
 static bool exynos_ufs_wait_pll_lock(struct exynos_ufs *ufs)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
+	struct ufs_hba *hba = ufs->hba;
+	unsigned long timeout = jiffies + msecs_to_jiffies(100);
 	u32 reg;
 
 	do {
@@ -569,12 +896,16 @@ static bool exynos_ufs_wait_pll_lock(struct exynos_ufs *ufs)
 
 	dev_err(ufs->dev, "timeout mphy pll lock\n");
 
+	if (ufs->hba)
+		exynos_ufs_get_debug_info(hba);
+
 	return false;
 }
 
 static bool exynos_ufs_wait_cdr_lock(struct exynos_ufs *ufs)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
+	struct ufs_hba *hba = ufs->hba;
+	unsigned long timeout = jiffies + msecs_to_jiffies(100);
 	u32 reg;
 
 	do {
@@ -585,6 +916,9 @@ static bool exynos_ufs_wait_cdr_lock(struct exynos_ufs *ufs)
 	} while (time_before(jiffies, timeout));
 
 	dev_err(ufs->dev, "timeout mphy cdr lock\n");
+	
+	if (ufs->hba)
+		exynos_ufs_get_debug_info(hba);
 
 	return false;
 }
@@ -1004,6 +1338,8 @@ static int exynos_ufs_post_link(struct ufs_hba *hba)
 {
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	const struct exynos_ufs_soc *soc = to_phy_soc(ufs);
+	u32 peer_rx_min_actv_time_cap;
+	u32 max_rx_hibern8_time_cap;
 
 	exynos_ufs_establish_connt(ufs);
 	exynos_ufs_fit_aggr_timeout(ufs);
@@ -1044,6 +1380,13 @@ static int exynos_ufs_post_link(struct ufs_hba *hba)
 		if (ufs->pa_hibern8time)
 			ufshcd_dme_set(hba,
 				UIC_ARG_MIB(PA_HIBERN8TIME), ufs->pa_hibern8time);
+	} else {
+		ufshcd_dme_get(hba, UIC_ARG_MIB(PA_TACTIVATE), &peer_rx_min_actv_time_cap);
+		ufshcd_dme_get(hba, UIC_ARG_MIB(PA_HIBERN8TIME), &max_rx_hibern8_time_cap);
+		if (ufs->rx_min_actv_time_cap <= peer_rx_min_actv_time_cap)
+			ufshcd_dme_peer_set(hba, UIC_ARG_MIB(PA_TACTIVATE),
+					peer_rx_min_actv_time_cap + 1);
+		ufshcd_dme_set(hba,UIC_ARG_MIB(PA_HIBERN8TIME), max_rx_hibern8_time_cap + 1);
 	}
 
 	if (soc)
@@ -1058,14 +1401,30 @@ static int exynos_ufs_init(struct ufs_hba *hba)
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	struct list_head *head = &hba->clk_list_head;
 	struct ufs_clk_info *clki;
+	struct exynos_ufs_clk_info *exynos_clki;
 
 	exynos_ufs_ctrl_hci_core_clk(ufs, false);
 	exynos_ufs_config_smu(ufs);
+
+	/* setup for debugging */
+	ufs_host_backup[ufs_host_index++] = ufs;
+	ufs->debug.sfr = ufs_cfg_log_sfr;
+	ufs->debug.attr = ufs_cfg_log_attr;
+	INIT_LIST_HEAD(&ufs->debug.misc.clk_list_head);
 
 	if (!head || list_empty(head))
 		goto out;
 
 	list_for_each_entry(clki, head, list) {
+		exynos_clki = devm_kzalloc(hba->dev, sizeof(*exynos_clki), GFP_KERNEL);
+		if (!exynos_clki) {
+			return -ENOMEM;
+		}
+		exynos_clki->clk = clki->clk;
+		exynos_clki->name = clki->name;
+		exynos_clki->freq = 0;
+		list_add_tail(&exynos_clki->list, &ufs->debug.misc.clk_list_head);
+
 		if (!IS_ERR_OR_NULL(clki->clk)) {
 			if (!strcmp(clki->name, "aclk_ufs"))
 				ufs->clk_hci = clki->clk;
@@ -1097,8 +1456,10 @@ static void exynos_ufs_host_reset(struct ufs_hba *hba)
 	dev_err(ufs->dev, "timeout host sw-reset\n");
 
 	exynos7_bts_show_mo_status();
-	exynos_ufs_fmp_reg_dump(hba);
-	exynos_ufs_hci_reg_dump(hba);
+	exynos_ufs_get_debug_info(hba);
+	exynos_ufs_misc_dump(hba);
+	exynos_ufs_sfr_dump(hba);
+	exynos_ufs_attr_dump(hba);	
 	exynos7_bts_show_mo_status();
 }
 
@@ -1426,6 +1787,12 @@ static int exynos_ufs_populate_dt(struct device *dev, struct exynos_ufs *ufs)
 					&ufs->rx_hibern8_time_cap))
 				dev_warn(dev,
 					"ufs-rx-hibern8-time-cap is empty\n");
+
+			if (of_property_read_u32(np,
+					"ufs-tx-hibern8-time-cap",
+					&ufs->tx_hibern8_time_cap))
+				dev_warn(dev,
+					"ufs-tx-hibern8-time-cap is empty\n");
 		} else if (ufs->rx_adv_fine_gran_sup_en == 1) {
 			/* fine granularity step */
 			if (of_property_read_u32(np,
@@ -1573,6 +1940,7 @@ static int exynos_ufs_probe(struct platform_device *pdev)
 		return ret;
 	}
 #endif
+	ufs->misc_flags = EXYNOS_UFS_MISC_TOGGLE_LOG;
 
 	ufs->dev = dev;
 	dev->platform_data = ufs;
@@ -1590,6 +1958,7 @@ static int exynos_ufs_remove(struct platform_device *pdev)
 #ifdef CONFIG_CPU_IDLE
 	exynos_pm_unregister_notifier(&ufs->lpa_nb);
 #endif
+	ufs->misc_flags = EXYNOS_UFS_MISC_TOGGLE_LOG;
 
 	exynos_ufs_ctrl_phy_pwr(ufs, false);
 
@@ -1657,6 +2026,7 @@ static const struct ufs_hba_variant_ops exynos_ufs_ops = {
 	.set_nexus_t_xfer_req = exynos_ufs_set_nexus_t_xfer_req,
 	.set_nexus_t_task_mgmt = exynos_ufs_set_nexus_t_task_mgmt,
 	.hibern8_notify = exynos_ufs_hibern8_notify,
+	.get_debug_info = exynos_ufs_get_debug_info,
 	.suspend = __exynos_ufs_suspend,
 	.resume = __exynos_ufs_resume,
 };
@@ -1821,6 +2191,7 @@ static const struct ufs_hba_variant exynos_ufs_drv_data = {
 	.quirks		= UFSHCI_QUIRK_BROKEN_DWORD_UTRD |
 			  UFSHCI_QUIRK_BROKEN_REQ_LIST_CLR |
 			  UFSHCI_QUIRK_USE_OF_HCE |
+			  UFSHCI_QUIRK_USE_ABORT_TASK |
 			  UFSHCI_QUIRK_SKIP_INTR_AGGR,
 	.vs_data	= &exynos_ufs_soc_data,
 };

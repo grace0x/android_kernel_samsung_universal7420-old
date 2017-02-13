@@ -49,6 +49,7 @@
 #define P547_SET_NFC_SERVICE_PID _IOW(PN547_MAGIC, 0x05, long)
 
 #define P547_GET_ESE_ACCESS _IOW(PN547_MAGIC, 0x06, long)
+#define P547_REL_SVDD_WAIT _IOW(PN547_MAGIC, 0x07, long)
 
 #ifdef CONFIG_NFC_PN547_LDO_CONTROL
 #define NFC_I2C_LDO_ON	1
@@ -64,6 +65,10 @@ typedef enum p61_access_state{
 	P61_STATE_SPI_PRIO = 0x1000, /*Start of p61 access by SPI on priority*/
 	P61_STATE_SPI_PRIO_END = 0x2000, /*End of p61 access by SPI on priority*/
 	P61_STATE_SPI_END = 0x4000,
+	P61_STATE_SPI_SVDD_SYNC_START = 0x0001, /*ESE_VDD Low req by SPI*/
+	P61_STATE_SPI_SVDD_SYNC_END = 0x0002, /*ESE_VDD is Low by SPI*/
+	P61_STATE_DWP_SVDD_SYNC_START = 0x0003, /*ESE_VDD  Low req by Nfc*/
+	P61_STATE_DWP_SVDD_SYNC_END = 0x0004, /*ESE_VDD is Low by Nfc*/
 }p61_access_state_t;
 #endif
 

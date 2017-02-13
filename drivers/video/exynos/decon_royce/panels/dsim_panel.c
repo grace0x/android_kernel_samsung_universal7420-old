@@ -96,6 +96,7 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	struct panel_private *panel = &dsim->priv;
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
 	u16 coordinate[2] = {0, };
+	int pi = get_panel_index_init();
 #endif
 
 	dsim->lcd = lcd_device_register("panel", dsim->dev, &dsim->priv, NULL);
@@ -112,26 +113,16 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 	}
 
 
-	panel->lcdConnected = PANEL_CONNECTED;
 	panel->state = PANEL_STATE_RESUMED;
 	panel->temperature = NORMAL_TEMPERATURE;
 	panel->acl_enable = 0;
 	panel->current_acl = 0;
-	panel->auto_brightness = 0;
 	panel->siop_enable = 0;
 	panel->current_hbm = 0;
 	panel->current_vint = 0;
+	panel->lux = -1;
 
-	panel->weakness_hbm_comp = 0;
 	dsim->glide_display_size = 0;
-	panel->auto_brightness_level = 6;
-
-
-#ifdef AID_INTERPOLATION
-	panel->brightness_step = 256;
-#else
-	panel->brightness_step = 65;				// 360
-#endif
 
 	mutex_init(&panel->lock);
 #ifdef CONFIG_EXYNOS_DECON_LCD_MCD
@@ -150,10 +141,12 @@ static int dsim_panel_probe(struct dsim_device *dsim)
 #endif
 
 #if defined(CONFIG_EXYNOS_DECON_MDNIE_LITE)
-	coordinate[0] = (u16)panel->coordinate[0];
-	coordinate[1] = (u16)panel->coordinate[1];
-	if (panel->mdnie_support)
+	coordinate[0] = (u16)panel->coordinate[pi][0];
+	coordinate[1] = (u16)panel->coordinate[pi][1];
+	if (panel->mdnie_support) {
 		mdnie_register(&dsim->lcd->dev, dsim, (mdnie_w)mdnie_lite_send_seq, (mdnie_r)mdnie_lite_read, coordinate);
+		panel->mdnie_class = get_mdnie_class();
+	}
 #endif
 
 probe_err:
@@ -223,9 +216,9 @@ static int dsim_panel_suspend(struct dsim_device *dsim)
 			goto suspend_err;
 		}
 	}
-	panel->state = PANEL_STATE_SUSPENED;
 
 suspend_err:
+	panel->state = PANEL_STATE_SUSPENED;
 	return ret;
 }
 

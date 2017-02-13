@@ -230,6 +230,8 @@ int eax_dma_dai_unregister(void)
 {
 	mutex_destroy(&di.mutex);
 
+	eax_adma_free_buf();
+
 	di.cpu_dai = NULL;
 	di.running = false;
 	di.params_init = false;
@@ -239,8 +241,6 @@ int eax_dma_dai_unregister(void)
 	mi.cpu_dai = NULL;
 	mi.running = false;
 	mi.thread_id = NULL;
-
-	eax_adma_free_buf();
 
 	return 0;
 }
@@ -280,6 +280,11 @@ static void eax_adma_buffdone(void *data)
 	pos = src - di.dma_start;
 	pos /= di.dma_period;
 	buf_idx = pos;
+	if (buf_idx >= DMA_PERIOD_CNT) {
+		spin_unlock(&di.lock);
+		return;
+	}
+
 	pos = di.dma_start + (pos * di.dma_period);
 	if (pos >= di.dma_end)
 		pos = di.dma_start;

@@ -368,6 +368,10 @@ static struct tdmb_drv_func raontech_mtv319_drv_func = {
 	.pull_data = mtv319_pull_data,
 #endif
 	.get_int_size = mtv319_int_size,
+	.byte_write = NULL,
+	.byte_read = NULL,
+	.word_write = NULL,
+	.word_read = NULL,
 };
 
 struct tdmb_drv_func *mtv319_drv_func(void)

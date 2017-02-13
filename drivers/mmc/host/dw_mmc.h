@@ -167,8 +167,8 @@
 #define mci_writel(dev, reg, value)			\
 	__raw_writel((value), (dev)->regs + SDMMC_##reg)
 
-/* timeout (maximum) */
-#define dw_mci_set_timeout(host)	mci_writel(host, TMOUT, 0xffffffff)
+/* timeout */
+#define dw_mci_set_timeout(host, value)        mci_writel(host, TMOUT, value)
 
 /* 16-bit FIFO access macros */
 #define mci_readw(dev, reg)			\
@@ -178,10 +178,25 @@
 
 /* 64-bit FIFO access macros */
 #ifdef readq
+#ifdef CONFIG_MMC_DW_FORCE_32BIT_SFR_RW
+#define mci_readq(dev, reg) ({\
+		u64 __ret = 0;\
+		u32* ptr = (u32*)&__ret;\
+		*ptr++ = __raw_readl((dev)->regs + SDMMC_##reg);\
+		*ptr = __raw_readl((dev)->regs + SDMMC_##reg + 0x4);\
+		__ret;\
+	})
+#define mci_writeq(dev, reg, value) ({\
+		u32 *ptr = (u32*)&(value);\
+		__raw_writel(*ptr++, (dev)->regs + SDMMC_##reg);\
+		__raw_writel(*ptr, (dev)->regs + SDMMC_##reg + 0x4);\
+	})
+#else
 #define mci_readq(dev, reg)			\
 	__raw_readq((dev)->regs + SDMMC_##reg)
 #define mci_writeq(dev, reg, value)			\
 	__raw_writeq((value), (dev)->regs + SDMMC_##reg)
+#endif	/* CONFIG_MMC_DW_FORCE_32BIT_SFR_RW */
 #else
 /*
  * Dummy readq implementation for architectures that don't define it.
@@ -219,6 +234,14 @@ enum dw_mci_misc_control {
 #define DW_MCI_TOGGLE_MASK			(0x7FFFFFFF)
 	CTRL_INIT_CLOCK,
 };
+
+#define SDMMC_DATA_TMOUT_SHIFT         11
+#define SDMMC_RESP_TMOUT               0xFF
+#define SDMMC_DATA_TMOUT_CRT           8
+#define SDMMC_DATA_TMOUT_EXT           0x7
+#define SDMMC_DATA_TMOUT_EXT_SHIFT     8
+
+extern u32 dw_mci_calc_timeout(struct dw_mci *host);
 
 extern int dw_mci_probe(struct dw_mci *host);
 extern void dw_mci_remove(struct dw_mci *host);
@@ -262,5 +285,60 @@ struct dw_mci_drv_data {
 			enum dw_mci_misc_control control, void *priv);
 	void		(*register_notifier)(struct dw_mci *host);
 	void		(*unregister_notifier)(struct dw_mci *host);
+};
+
+struct dw_mci_sfr_ram_dump {
+	u32			contrl;
+	u32			pwren;
+	u32			clkdiv;
+	u32			clkena;
+	u32			clksrc;
+	u32			tmout;
+	u32			ctype;
+	u32			blksiz;
+	u32			bytcnt;
+	u32			intmask;
+	u32			cmdarg;
+	u32			cmd;
+	u32		       	mintsts;
+	u32			rintsts;
+	u32			status;
+	u32			fifoth;
+	u32			tcbcnt;
+	u32			tbbcnt;
+	u32			debnce;
+	u32			uhs_reg;
+	u32			bmod;
+	u32			pldmnd;
+	u32			dbaddrl;
+	u32			dbaddru;
+	u32			dscaddrl;
+	u32			dscaddru;
+	u32			bufaddru;
+	u32			dbaddr;
+	u32			dscaddr;
+	u32			bufaddr;
+	u32			clksel;
+	u32			idsts64;
+	u32			idinten64;
+	u32			force_clk_stop;
+	u32			cdthrctl;
+	u32			ddr200_rdqs_en;
+	u32			ddr200_acync_fifo_ctrl;
+	u32			ddr200_dline_ctrl;
+	u32			fmp_emmcp_base;
+	u32			mpsecurity;
+	u32			mpstat;
+	u32			cmd_status;
+	u32			data_status;
+	u32			pending_events;
+	u32			completed_events;
+	u32			host_state;
+	u32			cmd_index;
+	u32			fifo_count;
+	u32			data_busy;
+	u32			data_3_state;
+	u32			fifo_tx_watermark;
+	u32			fifo_rx_watermark;
 };
 #endif /* _DW_MMC_H_ */

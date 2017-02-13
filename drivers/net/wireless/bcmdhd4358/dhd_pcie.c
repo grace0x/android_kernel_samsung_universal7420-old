@@ -1074,6 +1074,8 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 	int len;
 	void *image = NULL;
 	uint8 *memblock = NULL, *memptr;
+	
+	int offset_end = bus->ramsize;
 
 	DHD_ERROR(("%s: download firmware %s\n", __FUNCTION__, pfw_path));
 
@@ -1107,6 +1109,7 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 				bus->resetinstr = *(((uint32*)memptr));
 				/* Add start of RAM address to the address given by user */
 				offset += bus->dongle_ram_base;
+				offset_end += offset;
 			}
 		}
 
@@ -1118,6 +1121,10 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 		}
 
 		offset += MEMBLOCK;
+
+		if (offset >= offset_end) {
+			break;
+		}
 	}
 
 err:

@@ -126,7 +126,7 @@ int fimc_is_sensor_read16(struct i2c_client *client,
 {
 	int ret = 0;
 	struct i2c_msg msg[2];
-	u8 wbuf[2], rbuf[2];
+	u8 wbuf[2], rbuf[2] = {0, };
 
 	if (!client->adapter) {
 		err("Could not find adapter!\n");
@@ -770,7 +770,14 @@ static void fimc_is_sensor_dtp(unsigned long data)
 
 	BUG_ON(!device);
 
+	if (!device->force_stop && !device->dtp_check) {
+		mwarn("Invalid DTP timer interrupt(force_stop: 0x%08lx, dtp_check: %d)",
+			device, device->force_stop, device->dtp_check);
+		return;
+	}
+
 	err("forcely reset due to 0x%08lx", device->force_stop);
+	device->dtp_check = false;
 	device->force_stop = 0;
 
 	set_bit(FIMC_IS_SENSOR_FRONT_DTP_STOP, &device->state);
@@ -783,6 +790,11 @@ static void fimc_is_sensor_dtp(unsigned long data)
 	}
 
 	framemgr = GET_FRAMEMGR(vctx);
+	if (unlikely(!framemgr)) {
+		merr("framemgr is null", device);
+		return;
+	}
+
 	if ((framemgr->frame_cnt == 0) || (framemgr->frame_cnt > FRAMEMGR_MAX_REQUEST)) {
 		err("frame count of framemgr is invalid(%d)", framemgr->frame_cnt);
 		return;
@@ -960,6 +972,11 @@ static int fimc_is_sensor_notify_by_fstr(struct fimc_is_device_sensor *device, v
 
 	device->fcount = *(u32 *)arg;
 	framemgr = GET_FRAMEMGR(device->vctx);
+	if (unlikely(!framemgr)) {
+		merr("framemgr is null", device);
+		ret = -EINVAL;
+		goto p_err;
+	}
 
 	if (device->instant_cnt) {
 		device->instant_cnt--;
@@ -994,6 +1011,7 @@ static int fimc_is_sensor_notify_by_fstr(struct fimc_is_device_sensor *device, v
 
 	framemgr_x_barrier(framemgr, FMGR_IDX_28);
 
+p_err:
 	return ret;
 }
 
@@ -2054,6 +2072,12 @@ int fimc_is_sensor_buffer_finish(struct fimc_is_device_sensor *device,
 	}
 
 	framemgr = GET_FRAMEMGR(device->vctx);
+	if (unlikely(!framemgr)) {
+		merr("framemgr is null", device);
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	frame = &framemgr->frame[index];
 
 	framemgr_e_barrier_irqs(framemgr, FMGR_IDX_3, flags);

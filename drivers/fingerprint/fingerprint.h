@@ -31,16 +31,20 @@ enum {
 	SENSOR_VIPER,
 	SENSOR_RAPTOR,
 	SENSOR_EGIS,
+	SENSOR_VIPER_WOG,
 };
 
-#define SENSOR_STATUS_SIZE 5
-static char sensor_status[SENSOR_STATUS_SIZE][8] ={"unknown", "failed",
-	"viper", "raptor", "egis"};
+#define SENSOR_STATUS_SIZE 6
+static char sensor_status[SENSOR_STATUS_SIZE][10] ={"unknown", "failed",
+	"viper", "raptor", "egis", "viper_wog"};
 
-/* Fingerprint vendor check */
-#undef ENABLE_VENDOR_CHECK
+/* For Finger Detect Mode */
+enum {
+	DETECT_NORMAL = 0,
+	DETECT_ADM,			// Always on Detect Mode
+};
 
-#ifdef ENABLE_VENDOR_CHECK
+#ifdef CONFIG_SENSORS_FINGERPRINT_DUALIZATION
 extern int FP_CHECK; /* extern variable */
 #endif
 
@@ -49,7 +53,17 @@ extern int FP_CHECK; /* extern variable */
 #define MC_FC_FP_PM_RESUME ((uint32_t)(0x83000022))
 #define MC_FC_FP_BTP_OCP_HIGH ((uint32_t)(0x83000023))
 #define MC_FC_FP_BTP_OCP_LOW ((uint32_t)(0x83000024))
-#define MC_FC_FP_BTP_OCP_NONE ((uint32_t)(0x83000025))
+#define MC_FC_FP_BTP_OCP_NONE ((uint32_t)(0x83000025)) 
+#define MC_FC_FP_PM_SUSPEND_RETAIN ((uint32_t)(0x83000026))
+
+/* using for awake the samsung FP daemon */
+extern bool fp_lockscreen_mode;
+#ifdef CONFIG_SENSORS_FP_LOCKSCREEN_MODE
+/* input/Keyboard/gpio_keys.c */
+extern bool wakeup_by_key(void);
+/* export variable for signaling */
+EXPORT_SYMBOL(fp_lockscreen_mode);
+#endif
 #endif
 
 #endif

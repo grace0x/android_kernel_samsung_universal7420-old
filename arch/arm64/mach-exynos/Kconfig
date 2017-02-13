@@ -34,6 +34,7 @@ config SOC_EXYNOS7420
 	select SAMSUNG_DMADEV
 	select CAL_SYS_PWRDOWN
 	select EXYNOS_SPI_RESET_DURING_DSTOP if CPU_IDLE
+	select SOC_SAMSUNG
 	help
 	  Enable EXYNOS7420 SoC support
 

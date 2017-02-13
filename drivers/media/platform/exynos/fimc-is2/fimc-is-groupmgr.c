@@ -703,6 +703,14 @@ static void fimc_is_group_set_torch(struct fimc_is_group *group,
 	if (group->prev)
 		return;
 
+#if defined(CONFIG_INIT_TORCH_CURRENT_SUPPORT) && \
+		defined(CONFIG_TORCH_CURRENT_CHANGE_SUPPORT) && \
+		defined(CONFIG_LEDS_S2MPB02)
+	if (test_bit(FIMC_IS_ISCHAIN_REPROCESSING, &group->device->state)) {
+		return;
+	}
+#endif
+
 	if (group->aeflashMode != ldr_frame->shot->ctl.aa.vendor_aeflashMode) {
 		group->aeflashMode = ldr_frame->shot->ctl.aa.vendor_aeflashMode;
 
@@ -1794,7 +1802,9 @@ int fimc_is_group_stop(struct fimc_is_groupmgr *groupmgr,
 				}
 
 				if (!retry) {
-					mgerr(" waiting(subdev stop) is fail", device, group);
+					mgerr(" waiting(subdev %d stop) is fail", device, group, subdev->id);
+					fimc_is_hw_logdump(device->interface);
+					fimc_is_hw_regdump(device->interface);
 					errcnt++;
 				}
 			}

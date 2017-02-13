@@ -737,28 +737,6 @@ DECLARE_DVFS_CHK_FUNC(FIMC_IS_SN_DIS_ENABLE)
 	return 0;
 }
 
-static int fimc_is_set_pwm(struct fimc_is_device_ischain *device, u32 pwm_qos)
-{
-	int ret = 0;
-	u32 base_addr;
-	void __iomem *addr;
-
-	/* TODO */
-	base_addr = 0;
-
-	if (base_addr) {
-		addr = ioremap(base_addr + FIMC_IS_PWM_TCNTB0, SZ_4);
-		writel(pwm_qos, addr);
-		dbg("PWM SFR Read(%08X), pwm_qos(%08X)\n", readl(addr), pwm_qos);
-		iounmap(addr);
-	} else {
-		merr("fimc_is_set_pwm is not implemented", device);
-		BUG();
-	}
-
-	return ret;
-}
-
 int fimc_is_dvfs_init(struct fimc_is_resourcemgr *resourcemgr)
 {
 	ulong i;
@@ -1030,7 +1008,7 @@ exit:
 int fimc_is_set_dvfs(struct fimc_is_device_ischain *device, u32 scenario_id)
 {
 	int ret = 0;
-	int int_qos, mif_qos, i2c_qos, cam_qos, disp_qos, pwm_qos = 0;
+	int int_qos, mif_qos, i2c_qos, cam_qos, disp_qos = 0;
 	int refcount;
 	struct fimc_is_core *core;
 	struct fimc_is_resourcemgr *resourcemgr;
@@ -1056,10 +1034,9 @@ int fimc_is_set_dvfs(struct fimc_is_device_ischain *device, u32 scenario_id)
 	i2c_qos = fimc_is_get_qos(core, FIMC_IS_DVFS_I2C, scenario_id);
 	cam_qos = fimc_is_get_qos(core, FIMC_IS_DVFS_CAM, scenario_id);
 	disp_qos = fimc_is_get_qos(core, FIMC_IS_DVFS_DISP, scenario_id);
-	pwm_qos = fimc_is_get_qos(core, FIMC_IS_DVFS_PWM, scenario_id);
 
 	if ((int_qos < 0) || (mif_qos < 0) || (i2c_qos < 0)
-	|| (cam_qos < 0) || (disp_qos < 0) || (pwm_qos < 0)) {
+	|| (cam_qos < 0) || (disp_qos < 0)) {
 		err("getting qos value is failed!!\n");
 		return -EINVAL;
 	}
@@ -1070,14 +1047,6 @@ int fimc_is_set_dvfs(struct fimc_is_device_ischain *device, u32 scenario_id)
 			ret = fimc_is_itf_i2c_lock(device, i2c_qos, true);
 			if (ret) {
 				err("fimc_is_itf_i2_clock fail\n");
-				goto exit;
-			}
-		}
-
-		if (pwm_qos) {
-			fimc_is_set_pwm(device, pwm_qos);
-			if (ret) {
-				err("fimc_is_set_pwm fail\n");
 				goto exit;
 			}
 		}

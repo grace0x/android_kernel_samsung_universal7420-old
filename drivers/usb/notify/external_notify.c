@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+ /* usb notify layer v2.0 */
+
 #define pr_fmt(fmt) "usb_notify: " fmt
 
 #include <linux/module.h>
@@ -103,17 +105,18 @@ int usb_external_notify_unregister(struct notifier_block *nb)
 	return ret;
 }
 
-int send_external_notify(unsigned long cmd, int enable)
+int send_external_notify(unsigned long cmd, int data)
 {
 	int ret = 0;
 
-	pr_info("%s: cmd=%s(%lu), enable=%d\n", __func__, cmd_string(cmd),
-						cmd, enable);
+	pr_info("%s: cmd=%s(%lu), data=%d\n", __func__, cmd_string(cmd),
+						cmd, data);
 
 	create_external_notify();
 
 	ret = blocking_notifier_call_chain
-		(&(external_notifier.notifier_call_chain), cmd, &(enable));
+		(&(external_notifier.notifier_call_chain),
+			cmd, (void *)&(data));
 
 	switch (ret) {
 	case NOTIFY_STOP_MASK:

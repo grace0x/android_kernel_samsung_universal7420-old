@@ -300,7 +300,7 @@ const struct cntry_locales_custom translate_custom_table[] = {
 #else
 	{"KR", "KR", 48},
 #endif
-	{"RU", "RU", 988},
+	{"RU", "RU", 986},
 	{"UA", "UA", 16},
 	{"GT", "GT", 1},
 	{"MN", "MN", 1},

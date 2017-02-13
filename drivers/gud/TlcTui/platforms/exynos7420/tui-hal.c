@@ -32,6 +32,8 @@
 #include "tui-hal.h"
 #if defined(CONFIG_TOUCHSCREEN_FTS) || defined(CONFIG_TOUCHSCREEN_FTS5AD56)
 #include <linux/i2c/fts.h>
+#elif defined(CONFIG_TOUCHSCREEN_MELFAS_MMS449)
+#include <linux/input/mt.h>
 #endif
 
 /* I2C register for reset */
@@ -484,7 +486,7 @@ uint32_t hal_tui_deactivate(void)
 	switch_set_state(&tui_switch, TRUSTEDUI_MODE_VIDEO_SECURED);
 	pr_info(KERN_ERR "Disable touch!\n");
 	disable_irq(tsp_irq_num);
-#if defined(CONFIG_TOUCHSCREEN_FTS) || defined(CONFIG_TOUCHSCREEN_FTS5AD56)
+#if defined(CONFIG_TOUCHSCREEN_FTS) || defined(CONFIG_TOUCHSCREEN_FTS5AD56)|| defined(CONFIG_TOUCHSCREEN_MELFAS_MMS449)
 	tui_delay(5);
 	trustedui_mode_on();
 	tui_delay(95);

@@ -57,10 +57,11 @@ struct maxim_dsm_cal {
 	uint32_t platform_type;
 };
 
+extern struct class *maxdsm_cal_get_class(void);
 extern struct regmap *maxdsm_cal_set_regmap(
 		struct regmap *regmap);
-extern int maxdsm_cal_get_temp(uint32_t *temp);
-extern int maxdsm_cal_set_temp(uint32_t temp);
-extern int maxdsm_cal_get_rdc(uint32_t *rdc);
-extern int maxdsm_cal_set_rdc(uint32_t rdc);
+extern int maxdsm_cal_get_temp(int *temp);
+extern int maxdsm_cal_set_temp(int temp);
+extern int maxdsm_cal_get_rdc(int *rdc);
+extern int maxdsm_cal_set_rdc(int rdc);
 #endif /* __SOUND_MAXIM_DSM_CAL_H__ */

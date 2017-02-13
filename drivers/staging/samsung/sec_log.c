@@ -320,6 +320,40 @@ void sec_debug_tsp_log(char *fmt, ...)
 }
 EXPORT_SYMBOL(sec_debug_tsp_log);
 
+void sec_debug_tsp_log_msg(char *msg, char *fmt, ...)
+{
+	va_list args;
+	char buf[TSP_BUF_SIZE];
+	int len = 0;
+	unsigned int idx;
+	unsigned int size;
+	unsigned int size_dev_name;
+
+	/* In case of sec_tsp_log_setup is failed */
+	if (!sec_tsp_log_size)
+		return;
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+	idx = *sec_tsp_log_ptr;
+	size = strlen(buf);
+	size_dev_name = strlen(msg);
+
+	idx = sec_tsp_log_timestamp(idx);
+
+	/* Overflow buffer size */
+	if (idx + size + size_dev_name + 3 + 1 > sec_tsp_log_size) {
+		len = scnprintf(&sec_tsp_log_buf[0],
+						size + size_dev_name + 3 + 1, "%s : %s", msg, buf);
+		*sec_tsp_log_ptr = len;
+	} else {
+		len = scnprintf(&sec_tsp_log_buf[idx], size + size_dev_name + 3 + 1, "%s : %s", msg, buf);
+		*sec_tsp_log_ptr += len;
+	}
+}
+EXPORT_SYMBOL(sec_debug_tsp_log_msg);
+
 static ssize_t sec_tsp_log_write(struct file *file,
 					     const char __user *buf,
 					     size_t count, loff_t *ppos)

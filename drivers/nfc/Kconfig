@@ -112,6 +112,15 @@ config ESE_P3_LSI
 	  This driver provides support for LSI NXP combined ESE products.
 	  You should select your NFC product and interface.
 
+config ESE_GEM_LSI
+	bool "Gemalto ese driver"
+	depends on SPI
+	default n
+	help
+	  Gemalto Driver.
+	  This driver provides support for LSI NXP combined ESE products.
+	  You should select your NFC product and interface.
+
 config ESE_FACTORY_ONLY
 	bool "Oberthur ese driver factory"
 	depends on SPI

@@ -116,6 +116,64 @@ static bool __get_ensemble_info(struct ensemble_info_type *e_info
 					= fci_sub_info->ucServiceType;
 				e_info->sub_ch[sub_i].svc_id
 					= fci_sub_info->ulServiceID;
+
+				e_info->sub_ch[sub_i].ca_flags
+					= fci_sub_info->ucCAFlag;
+				DPRINTK("%s: sub_channel_id(%d), ca_flags(%d)\n", __func__,
+					sub_i, fci_sub_info->ucCAFlag);
+#if 0//for HD-DMB, spec is not determined yet
+				e_info->sub_ch[sub_i].ca_sys_id
+					= fci_sub_info->ca_sys_id;
+				memcpy(e_info->sub_ch[sub_i].ca_int_char, fci_sub_info->ca_int_char, 24);
+				DPRINTK("%s: ca_sys_id(0x%04x)\n", __func__, fci_sub_info->ca_sys_id);
+				DPRINTK("%s: ca_int_char: %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x | %02x:%02x:%02x:%02x\n",
+					__func__,
+					fci_sub_info->ca_int_char[0],fci_sub_info->ca_int_char[1],
+					fci_sub_info->ca_int_char[2],fci_sub_info->ca_int_char[3],
+					fci_sub_info->ca_int_char[4],fci_sub_info->ca_int_char[5],
+					fci_sub_info->ca_int_char[6],fci_sub_info->ca_int_char[7],
+					fci_sub_info->ca_int_char[8],fci_sub_info->ca_int_char[9],
+					fci_sub_info->ca_int_char[10],fci_sub_info->ca_int_char[11],
+					fci_sub_info->ca_int_char[12],fci_sub_info->ca_int_char[13],
+					fci_sub_info->ca_int_char[14],fci_sub_info->ca_int_char[15],
+					fci_sub_info->ca_int_char[16],fci_sub_info->ca_int_char[17],
+					fci_sub_info->ca_int_char[18],fci_sub_info->ca_int_char[19],
+					fci_sub_info->ca_int_char[20],fci_sub_info->ca_int_char[21],
+					fci_sub_info->ca_int_char[22],fci_sub_info->ca_int_char[23]);
+
+				if (i == 0) {
+					int k;
+					DPRINTK("%s: num_of_user_appl(%d)\n", __func__,
+						fci_sub_info->num_of_user_appl);
+					/* jgk: "num_of_user_appl" is always 0 or 1?
+						no case of more than 1?
+						below codes are valid only if "num_of_user_appl" is
+						either 0 or 1 only!!
+					*/
+					for (k = 0; k < fci_sub_info->num_of_user_appl; k++) {
+						DPRINTK("%s: k(%d), app_type(0x%04x), data_len(%u), data %02x:%02x:%02x:%02x %02x:%02x:%02x:%02x\n",
+							__func__, k,
+							fci_sub_info->user_appl_type[k],
+							fci_sub_info->user_appl_length[k],
+							fci_sub_info->user_appl_data[k][0],
+							fci_sub_info->user_appl_data[k][1],
+							fci_sub_info->user_appl_data[k][2],
+							fci_sub_info->user_appl_data[k][3],
+							fci_sub_info->user_appl_data[k][4],
+							fci_sub_info->user_appl_data[k][5],
+							fci_sub_info->user_appl_data[k][6],
+							fci_sub_info->user_appl_data[k][7]);
+						if (fci_sub_info->user_appl_type[k] == 0x09) {
+							e_info->sub_ch[sub_i].user_application_type
+								= fci_sub_info->user_appl_type[k];
+							e_info->sub_ch[sub_i].video_svc_obj_profile_id
+								= fci_sub_info->user_appl_data[k][0];
+							e_info->sub_ch[sub_i].main_object_type_id
+								= fci_sub_info->user_appl_data[k][1];
+						}
+					}
+				}
+#endif
 				e_info->sub_ch[sub_i].scids
 					= fci_sub_info->scids;
 				e_info->sub_ch[sub_i].ecc
@@ -264,6 +322,50 @@ static bool fc8080_scan_ch(struct ensemble_info_type *e_info
 	}
 }
 
+static int fc8080_byte_write(u16 addr, u8 data)
+{
+	pr_debug("%s %d fc8080_pwr_on(%d), addr(0x%x), data(0x%x)\n",
+		__func__, __LINE__, fc8080_pwr_on, addr, data);
+	
+	if (fc8080_pwr_on == false)
+		return -1;
+
+	return dmb_drv_byte_write(addr, data);
+}
+
+static int fc8080_byte_read(u16 addr, u8* data)
+{
+	pr_debug("%s %d fc8080_pwr_on(%d), addr(0x%x)\n",
+		__func__, __LINE__, fc8080_pwr_on, addr);
+	
+	if (fc8080_pwr_on == false)
+		return -1;
+
+	return dmb_drv_byte_read(addr, data);
+}	
+
+static int fc8080_word_write(u16 addr, u16 data)
+{
+	pr_debug("%s %d fc8080_pwr_on(%d), addr(0x%x), data(0x%x)\n",
+		__func__, __LINE__, fc8080_pwr_on, addr, data);
+	
+	if (fc8080_pwr_on == false)
+		return -1;
+
+	return dmb_drv_word_write(addr, data);
+}
+
+static int fc8080_word_read(u16 addr, u16* data)
+{
+	pr_debug("%s %d fc8080_pwr_on(%d), addr(0x%x)\n",
+		__func__, __LINE__, fc8080_pwr_on, addr);
+	
+	if (fc8080_pwr_on == false)
+		return -1;
+
+	return dmb_drv_word_read(addr, data);
+}
+
 static unsigned long fc8080_int_size(void)
 {
 #if defined(CONFIG_TDMB_TSIF_SLSI) || defined(CONFIG_TDMB_TSIF_QC)
@@ -283,6 +385,10 @@ static struct tdmb_drv_func fci_fc8080_drv_func = {
 	.pull_data = dmb_drv_isr,
 #endif
 	.get_int_size = fc8080_int_size,
+	.byte_write = fc8080_byte_write,
+	.byte_read = fc8080_byte_read,
+	.word_write = fc8080_word_write,
+	.word_read = fc8080_word_read,
 };
 
 struct tdmb_drv_func *fc8080_drv_func(void)

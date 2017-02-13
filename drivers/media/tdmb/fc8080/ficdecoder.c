@@ -40,6 +40,7 @@ struct didp_info_t didpInfo[MAX_DIDP_NUM];
 
 static int fig0_decoder(struct fig *pFig);
 static int fig1_decoder(struct fig *pFig);
+static int fig6_decoder(struct fig *pFig);
 
 static int fig0_ext1_decoder(u8 cn, u8 *fibBuffer, int figLength);
 static int fig0_ext2_decoder(u8 *fibBuffer, int figLength, int pd);
@@ -406,6 +407,9 @@ int fib_decoder(struct fib *pfib)
 				print_log(NULL, "SI Error [%x]\n", result);
 			*/
 			break;
+		case 6:
+			result = fig6_decoder(pFig);		/* Conditional Access */
+			break;
 
 		default:
 			/*
@@ -531,6 +535,61 @@ static int fig1_decoder(struct fig *pFig)
 		*/
 		result = 1;
 		break;
+	}
+
+	return result;
+}
+
+static int fig6_decoder(struct fig *pFig)
+{
+	struct service_info_t *svc_info;
+	u8 *fib_buf = pFig->data;
+	u8 sta;
+	u8 pd;
+	u8 maxlen;
+	u8 lef;
+	u32 temp;
+	s32 result = 0;
+	s32 readcnt = 0;
+	s32 i;
+	u32 sid;
+
+	sta = fib_buf[readcnt++];
+	pd = (sta & 0x10) >> 4;
+	lef = (sta & 0x08) >> 3; 
+	temp = fib_buf[readcnt++];
+	temp = temp << 8 | fib_buf[readcnt++];
+
+	if (pd) {
+		temp = temp << 8 | fib_buf[readcnt++];
+		temp = temp << 8 | fib_buf[readcnt++];
+		sid = temp;
+		maxlen = MAX_CAINT_CHAR - 2;
+	} else {
+		sid = temp;
+		maxlen = MAX_CAINT_CHAR;
+	}
+
+	svc_info = get_service_info(sid);
+	if (svc_info == NULL) {
+		/*print_log(NULL, "get_service_info Error ...\n"); */
+		return result;
+	}
+
+	svc_info->addrType = pd;
+	svc_info->sid = sid;
+	svc_info->flag |= 0x08;
+	memset(&svc_info->ca_int_char[0], 0, MAX_CAINT_CHAR);
+	if (lef) {
+		temp = fib_buf[readcnt++];
+		temp = temp << 8 | fib_buf[readcnt++];
+		svc_info->ca_sys_id = temp;
+		for (i = 0; i < maxlen; i++)
+			svc_info->ca_int_char[i] = fib_buf[readcnt++];
+	} else {
+		svc_info->ca_sys_id = 0;
+		for (i = 0; i < maxlen; i++)
+			svc_info->ca_int_char[i] = 0;
 	}
 
 	return result;
@@ -676,6 +735,7 @@ static int fig0_ext2_decoder(u8 *fibBuffer, int figLength, int pd)
 				if ((sta & 0x02) == 0x02) {	/* Primary */
 					svc_info->sub_channel_id
 						= (sta >> 2) & 0x3F;
+					svc_info->ca_flag= sta & 0x01;
 					svc_info->tmid = tmid;
 				}
 				sub_ch_info =
@@ -696,6 +756,7 @@ static int fig0_ext2_decoder(u8 *fibBuffer, int figLength, int pd)
 				if ((sta & 0x02) == 0x02) {	/* Primary */
 					svc_info->sub_channel_id
 						= (sta >> 2) & 0x3F;
+					svc_info->ca_flag= sta & 0x01;
 					svc_info->tmid = tmid;
 				}
 				sub_ch_info =
@@ -716,6 +777,7 @@ static int fig0_ext2_decoder(u8 *fibBuffer, int figLength, int pd)
 				if ((sta & 0x02) == 0x02) {	/*  Primary */
 					svc_info->fidc_id = (sta & 0xFC) >> 2;
 					svc_info->tmid = tmid;
+					svc_info->ca_flag= sta & 0x01;
 				}
 				svc_info->flag |= 0x04;
 				break;
@@ -725,6 +787,7 @@ static int fig0_ext2_decoder(u8 *fibBuffer, int figLength, int pd)
 				if ((sta & 0x02) == 0x02) { 	/*  Primary */
 					svc_info->scid |= (sta & 0xFC) >> 2;
 					svc_info->tmid = tmid;
+					svc_info->ca_flag= sta & 0x01;
 				}
 				/*  by iproda */
 				svc_info->flag |= 0x04;

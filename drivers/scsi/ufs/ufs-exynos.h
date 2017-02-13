@@ -150,7 +150,15 @@ enum {
 #define UNIP_DME_PEER_GETSET_RDATA		0x128
 #define UNIP_DME_PEER_GETSET_CONTROL		0x12C
 #define UNIP_DME_PEER_GETSET_RESULT		0x130
+#define UNIP_DME_DIRECT_GETSET_BASE		0x134
+#define UNIP_DME_DIRECT_GETSET_ERR_ADDR		0x138
+#define UNIP_DME_DIRECT_GETSET_ERR_CODE		0x13c
+#define UNIP_DME_INTR_ERROR_CODE		0x140
+#define UNIP_DBG_DME_CTRL_STATE			0x14C
 #define UNIP_DBG_FORCE_DME_CTRL_STATE		0x150
+#define UNIP_DBG_PA_CTRLSTATE			0x15C
+#define UNIP_DBG_PA_TX_STATE			0x160
+
 
 /*
  * UFS Protector registers
@@ -397,6 +405,41 @@ struct uic_pwr_mode {
 	u32 remote_l2_timer[3];
 };
 
+struct exynos_ufs_clk_info {
+	struct list_head list;
+	struct clk *clk;
+	const char *name;
+	u32 freq;
+};
+
+struct exynos_ufs_misc_log {
+	struct list_head clk_list_head;
+	bool isolation;
+};
+
+struct exynos_ufs_sfr_log {
+	const char* name;
+	const u32 offset;
+#define LOG_STD_HCI_SFR		0xFFFFFFF0
+#define LOG_VS_HCI_SFR		0xFFFFFFF1
+#define LOG_FMP_SFR		0xFFFFFFF2
+#define LOG_UNIPRO_SFR		0xFFFFFFF3
+#define LOG_PMA_SFR		0xFFFFFFF4
+	u32 val;
+};
+
+struct exynos_ufs_attr_log {
+	const u32 offset;
+	u32 res;
+	u32 val;
+};
+
+struct exynos_ufs_debug {
+	struct exynos_ufs_sfr_log* sfr;
+	struct exynos_ufs_attr_log* attr;
+	struct exynos_ufs_misc_log misc;
+};
+
 struct exynos_ufs {
 	struct device *dev;
 	struct ufs_hba *hba;
@@ -427,6 +470,7 @@ struct exynos_ufs {
 	u32 rx_adv_fine_gran_step;
 	u32 rx_min_actv_time_cap;
 	u32 rx_hibern8_time_cap;
+	u32 tx_hibern8_time_cap;
 	u32 rx_adv_min_actv_time_cap;
 	u32 rx_adv_hibern8_time_cap;
 
@@ -439,6 +483,11 @@ struct exynos_ufs {
 
 	u32 opts;
 #define EXYNOS_UFS_OPTS_SKIP_CONNECTION_ESTAB	BIT(0)
+
+	/* for miscellaneous control */
+	u32 misc_flags;
+#define EXYNOS_UFS_MISC_TOGGLE_LOG	BIT(0)
+	struct exynos_ufs_debug debug;
 };
 
 struct phy_tm_parm {

@@ -136,7 +136,13 @@ struct SVR_COM_DESP {
 	U8  Num_User_App;
 	U16 User_APP_Type[USER_APP_NUM];
 	U8  User_APP_data_length[USER_APP_NUM];
-	U8  User_APP_data[24];
+	U8  User_APP_data[USER_APP_NUM][24];
+
+	// HD-DMB
+	U16 CASid;
+	U8  aCAIntChar[24];
+
+	char FIG6_exist_flag;
 };
 
 /*! Service Descriptor for Application user */
@@ -429,7 +435,7 @@ struct FIG_TYPE0_Ext13 {
 	U8  DG_flag;
 	U8  DSCTy;
 	U16 CA_Org;
-	U8  User_APP_data[24];
+	U8  User_APP_data[6][23];
 };
 
 /* FEC sub-channel organization */
@@ -621,7 +627,7 @@ struct FIG_TYPE6 {
 	U8  ShortCASysId;
 	U32 Sid;
 	U16 CASysId;
-	U16 CAIntChar;
+	U8 CAIntChar[24];
 };
 
 /***************************/

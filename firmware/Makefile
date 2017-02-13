@@ -142,6 +142,13 @@ fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
 fw-shipped-$(CONFIG_EPEN_WACOM_W9012) += epen/W9012_T.bin epen/W9012_TB.bin
 fw-shipped-$(CONFIG_EPEN_WACOM_W9014) += epen/W9014_NOBLE.bin
 
+TSPFIRMWARE_DIRECTORY = firmware/tsp_melfas
+ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449) += tsp_melfas/mms449_a8x.fw 
+else
+$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
+endif
+
 TSPFIRMWARE_DIRECTORY = firmware/tsp_synaptics
 ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_h.fw \
@@ -170,9 +177,10 @@ $(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
 endif
 
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH) += abov/abov_noble.fw abov/abov_zen.fw \
-							abov/abov_valley.fw
+							abov/abov_valley.fw abov/abov_a8x.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_FOLDER) += abov/abov_tk_royce.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_FT16XX_TOUCH_VALLEY) += abov/abov_valley.fw
+fw-shipped-$(CONFIG_KEYBOARD_TC300K) += coreriver/tc305k_a8x.fw
 fw-shipped-$(CONFIG_KEYBOARD_CYPRESS_TOUCH_MBR31X5) += cypress/cypress_zerof.fw \
 							cypress/cypress_vlte.fw cypress/cypress_noble.fw
 fw-shipped-$(CONFIG_KEYBOARD_CYPRESS_TOUCH_20075) += cypress/cypress_k.fw
@@ -198,6 +206,8 @@ ifdef CONFIG_SENSORS_SSP_STM
 		fw-shipped-y += ssp_stm_royce.fw ssp_crashed.fw
 	endif
 endif
+
+fw-shipped-$(CONFIG_SENSORS_SSP_STM32) += ssp_stmf410_a8xe.fw
 
 # Wireless charger
 #fw-shipped-$(CONFIG_WIRELESS_FIRMWARE_UPDATE) += idt/p9220_otp.bin idt/p9220_sram.bin

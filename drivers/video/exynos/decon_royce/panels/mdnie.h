@@ -164,7 +164,7 @@ struct mdnie_ops {
 typedef int (*mdnie_w)(unsigned int a, unsigned int v);
 typedef int (*mdnie_r)(unsigned int a);
 #endif
-
+#define PANEL_NUM_MAX 2
 struct mdnie_info {
 	struct clk		*bus_clk;
 	struct clk		*clk;
@@ -185,7 +185,6 @@ struct mdnie_info {
 	unsigned int		tuning;
 	unsigned int		accessibility;
 	unsigned int		color_correction;
-	unsigned int		auto_brightness;
 
 	char			path[50];
 
@@ -203,7 +202,7 @@ struct mdnie_info {
 #endif
 	struct mdnie_table table_buffer;
 	mdnie_t sequence_buffer[256];
-	u16 coordinate[2];
+	u16 coordinate[PANEL_NUM_MAX][2];
 #if defined(CONFIG_EXYNOS_DECON_MDNIE)
 	mdnie_t *lpd_store_data;
 	unsigned int need_update;
@@ -228,5 +227,8 @@ extern int mdnie_register(struct device *p, void *data, mdnie_w w, mdnie_r r, u1
 extern int mdnie2_register(struct device *p, void *data, mdnie_w w, mdnie_r r);
 #endif
 extern struct mdnie_table *mdnie_request_table(char *path, struct mdnie_table *s);
+extern int get_panel_index_init(void);
+extern ssize_t attr_store_for_each(struct class *cls, const char *name, const char *buf, size_t size);
+extern struct class *get_mdnie_class(void);
 
 #endif /* __MDNIE_H__ */

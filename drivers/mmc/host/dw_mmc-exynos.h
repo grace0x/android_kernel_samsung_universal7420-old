@@ -45,6 +45,8 @@ struct dw_mci_exynos_priv_data {
 	u32			ddr200_ulp_timing;
 	u32			ddr200_tx_t_fastlimit;
 	u32			ddr200_tx_t_initval;
+	u32			sdr104_timing;
+	u32			sdr50_timing;
 	u32			*ref_clk;
 	const char		*drv_str_pin;
 	const char		*drv_str_addr;
@@ -54,6 +56,11 @@ struct dw_mci_exynos_priv_data {
 	int			drv_str_base_val;
 	u32			drv_str_num;
 	int			cd_gpio;
+	int 		sec_sd_slot_type;
+#define SEC_NO_DET_SD_SLOT	0 /* No detect GPIO SD slot case */
+#define SEC_HOTPLUG_SD_SLOT	1 /* detect GPIO SD slot without Tray */
+#define SEC_HYBRID_SD_SLOT	2 /* detect GPIO SD slot with Tray */
+#define SEC_HYBRID_SD_SLOT_PD 3
 	u32			caps;
 	u32			ctrl_flag;
 	u32			ctrl_windows;

@@ -27,6 +27,12 @@
 
 #define to_mmc_driver(d)	container_of(d, struct mmc_driver, drv)
 
+#ifdef CONFIG_MMC_SUPPORT_STLOG
+#include <linux/stlog.h>
+#else
+#define ST_LOG(fmt,...)
+#endif
+
 static ssize_t mmc_type_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -339,17 +345,19 @@ int mmc_add_card(struct mmc_card *card)
  */
 void mmc_remove_card(struct mmc_card *card)
 {
+	if (mmc_card_present(card)) {
 #ifdef CONFIG_DEBUG_FS
-	mmc_remove_card_debugfs(card);
+		mmc_remove_card_debugfs(card);
+		mmc_card_clr_present(card);
 #endif
 
-	if (mmc_card_present(card)) {
 		if (mmc_host_is_spi(card->host)) {
 			pr_info("%s: SPI card removed\n",
 				mmc_hostname(card->host));
 		} else {
 			pr_info("%s: card %04x removed\n",
 				mmc_hostname(card->host), card->rca);
+			ST_LOG("<%s> %s remove detected",__func__,mmc_hostname(card->host));
 		}
 		device_del(&card->dev);
 	}

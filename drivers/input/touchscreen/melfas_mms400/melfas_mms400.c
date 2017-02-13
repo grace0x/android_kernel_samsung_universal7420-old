@@ -8,11 +8,14 @@
 #include "melfas_mms400.h"
 #include <linux/hall.h>
 
-
-#if MMS_USE_NAP_MODE
-struct wake_lock mms_wake_lock;
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+#include <linux/trustedui.h>
 #endif
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+extern int tui_force_close(uint32_t arg);
+struct mms_ts_info *tui_tsp_info;
+#endif
 /**
  * Reboot chip
  *
@@ -22,7 +25,7 @@ void mms_reboot(struct mms_ts_info *info)
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(info->client->dev.parent);
 
-	tsp_debug_dbg(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	i2c_lock_adapter(adapter);
 
@@ -31,9 +34,12 @@ void mms_reboot(struct mms_ts_info *info)
 
 	i2c_unlock_adapter(adapter);
 
-	msleep(30);
+	usleep_range(10000, 10000);
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	if (info->flip_enable)
+		mms_set_cover_type(info);
+
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 }
 
 /**
@@ -59,20 +65,28 @@ int mms_i2c_read(struct mms_ts_info *info, char *write_buf, unsigned int write_l
 		},
 	};
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	if (TRUSTEDUI_MODE_INPUT_SECURED & trustedui_get_current_mode()) {
+		dev_err(&info->client->dev, 
+			"%s TSP no accessible from Linux, TUI is enabled!\n", __func__);
+		return -EIO;
+	}
+#endif
+
 	while (retry--) {
 		res = i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg));
 
 		if (res == ARRAY_SIZE(msg)) {
 			goto DONE;
 		} else if (res < 0) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] i2c_transfer - errno[%d]\n", __func__, res);
 		} else if (res != ARRAY_SIZE(msg)) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] i2c_transfer - result[%d]\n",
 				__func__, res);
 		}else {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] unknown error [%d]\n", __func__, res);
 		}
 	}
@@ -98,20 +112,28 @@ int mms_i2c_read_next(struct mms_ts_info *info, char *read_buf, int start_idx,
 	int res;
 	u8 rbuf[read_len];
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	if (TRUSTEDUI_MODE_INPUT_SECURED & trustedui_get_current_mode()) {
+		dev_err(&info->client->dev, 
+			"%s TSP no accessible from Linux, TUI is enabled!\n", __func__);
+		return -EIO;
+	}
+#endif
+
 	while (retry--) {
 		res = i2c_master_recv(info->client, rbuf, read_len);
 
 		if (res == read_len) {
 			goto DONE;
 		} else if (res < 0) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] i2c_master_recv - errno [%d]\n", __func__, res);
 		} else if (res != read_len) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] length mismatch - read[%d] result[%d]\n",
 				__func__, read_len, res);
 		} else {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] unknown error [%d]\n", __func__, res);
 		}
 	}
@@ -136,20 +158,28 @@ int mms_i2c_write(struct mms_ts_info *info, char *write_buf, unsigned int write_
 	int retry = I2C_RETRY_COUNT;
 	int res;
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	if (TRUSTEDUI_MODE_INPUT_SECURED & trustedui_get_current_mode()) {
+		dev_err(&info->client->dev, 
+			"%s TSP no accessible from Linux, TUI is enabled!\n", __func__);
+		return -EIO;
+	}
+#endif
+
 	while (retry--) {
 		res = i2c_master_send(info->client, write_buf, write_len);
 
 		if (res == write_len) {
 			goto DONE;
 		} else if (res < 0) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] i2c_master_send - errno [%d]\n", __func__, res);
 		} else if (res != write_len) {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] length mismatch - write[%d] result[%d]\n",
 				__func__, write_len, res);
 		} else {
-			tsp_debug_err(true, &info->client->dev,
+			input_err(true, &info->client->dev,
 				"%s [ERROR] unknown error [%d]\n", __func__, res);
 		}
 	}
@@ -169,10 +199,10 @@ DONE:
  */
 int mms_enable(struct mms_ts_info *info)
 {
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	if (info->enabled) {
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s : already enabled\n", __func__);
 		return 0;
 	}
@@ -182,8 +212,10 @@ int mms_enable(struct mms_ts_info *info)
 	if (!info->init)
 		mms_power_control(info, 1);
 
-	enable_irq(info->client->irq);
 	info->enabled = true;
+	if (info->flip_enable)
+		mms_set_cover_type(info);
+	enable_irq(info->client->irq);
 
 	mutex_unlock(&info->lock);
 
@@ -191,12 +223,12 @@ int mms_enable(struct mms_ts_info *info)
 		mms_disable_esd_alert(info);
 	}
 
-#ifdef CONFIG_VBUS_NOTIFIER
+#ifdef MMS_SUPPORT_TA_MODE
 	if (info->ta_stsatus)
 		mms_charger_attached(info, true);
 #endif
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 }
 
@@ -205,10 +237,10 @@ int mms_enable(struct mms_ts_info *info)
  */
 int mms_disable(struct mms_ts_info *info)
 {
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	if (!info->enabled){
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s : already disabled\n", __func__);
 		return 0;
 	}
@@ -222,7 +254,7 @@ int mms_disable(struct mms_ts_info *info)
 
 	mutex_unlock(&info->lock);
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 }
 
@@ -234,8 +266,35 @@ static int mms_input_open(struct input_dev *dev)
 {
 	struct mms_ts_info *info = input_get_drvdata(dev);
 
-	if (!info->init)
-		mms_enable(info);
+	if (!info->init) {
+		input_info(true, &info->client->dev, "%s %s\n",
+				__func__, info->lowpower_mode ? "exit LPM mode" : "");
+
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+		if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
+			dev_err(&info->client->dev, "%s TUI cancel event call!\n", __func__);
+			msleep(100);
+			tui_force_close(1);
+			msleep(200);
+			if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
+				dev_err(&info->client->dev, "%s TUI flag force clear!\n",	__func__);
+				trustedui_clear_mask(TRUSTEDUI_MODE_VIDEO_SECURED|TRUSTEDUI_MODE_INPUT_SECURED);
+				trustedui_set_mode(TRUSTEDUI_MODE_OFF);
+			}
+		}
+#endif
+
+		if (info->lowpower_mode) {
+			if (device_may_wakeup(&info->client->dev))
+				disable_irq_wake(info->client->irq);
+
+			mms_reboot(info);
+			if (info->flip_enable)
+				mms_set_cover_type(info);
+		} else {
+			mms_enable(info);
+		}
+	}
 
 	return 0;
 }
@@ -246,7 +305,33 @@ static int mms_input_open(struct input_dev *dev)
 static void mms_input_close(struct input_dev *dev)
 {
 	struct mms_ts_info *info = input_get_drvdata(dev);
-	mms_disable(info);
+
+	input_info(true, &info->client->dev, "%s %s\n",
+			__func__, info->lowpower_mode ? "enter LPM mode" : "");
+
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){	
+		dev_err(&info->client->dev, "%s TUI cancel event call!\n", __func__);
+		msleep(100);
+		tui_force_close(1);
+		msleep(200);
+		if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){	
+			dev_err(&info->client->dev, "%s TUI flag force clear!\n",	__func__);
+			trustedui_clear_mask(TRUSTEDUI_MODE_VIDEO_SECURED|TRUSTEDUI_MODE_INPUT_SECURED);
+			trustedui_set_mode(TRUSTEDUI_MODE_OFF);
+		}
+	}
+#endif
+
+	if (info->lowpower_mode) {
+		mms_lowpower_mode(info, 1);
+		if (device_may_wakeup(&info->client->dev))
+			enable_irq_wake(info->client->irq);
+		mms_clear_input(info);
+	} else {
+		mms_disable(info);
+	}
+
 	return;
 }
 #endif
@@ -257,7 +342,7 @@ struct delayed_work * p_ghost_check;
 void run_intensity_for_ghosttouch(struct mms_ts_info *info){
 
 	if (mms_get_image(info, MIP_IMG_TYPE_INTENSITY)) {
-		tsp_debug_err(true, &info->client->dev, "%s \n", "NG");
+		input_err(true, &info->client->dev, "%s \n", "NG");
 	}
 }
 static void mms_ghost_touch_check(struct work_struct *work)
@@ -267,19 +352,19 @@ static void mms_ghost_touch_check(struct work_struct *work)
 	int i;
 
 	if(info->tsp_dump_lock==1){
-		tsp_debug_err(true, &info->client->dev, "%s, ignored ## already checking..\n", __func__);
+		input_err(true, &info->client->dev, "%s, ignored ## already checking..\n", __func__);
 		return;
 	}
 
 	info->tsp_dump_lock = 1;
 	info->add_log_header = 1;
 	for(i=0; i<5; i++){
-		tsp_debug_err(true, &info->client->dev, "%s, start ##\n", __func__);
+		input_err(true, &info->client->dev, "%s, start ##\n", __func__);
 		run_intensity_for_ghosttouch((void *)info);
 		msleep(100);
 
 	}
-	tsp_debug_info(true, &info->client->dev, "%s, done ##\n", __func__);
+	input_info(true, &info->client->dev, "%s, done ##\n", __func__);
 	info->tsp_dump_lock = 0;
 	info->add_log_header = 0;
 
@@ -318,12 +403,12 @@ int mms_get_ready_status(struct mms_ts_info *info)
 	u8 rbuf[16];
 	int ret = 0;
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [START]\n", __func__);
 
 	wbuf[0] = MIP_R0_CTRL;
 	wbuf[1] = MIP_R1_CTRL_READY_STATUS;
 	if (mms_i2c_read(info, wbuf, 2, rbuf, 1)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_read\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_read\n", __func__);
 		goto ERROR;
 	}
 	ret = rbuf[0];
@@ -331,9 +416,9 @@ int mms_get_ready_status(struct mms_ts_info *info)
 	//check status
 	if ((ret == MIP_CTRL_STATUS_NONE) || (ret == MIP_CTRL_STATUS_LOG)
 		|| (ret == MIP_CTRL_STATUS_READY)) {
-		tsp_debug_info(true, &info->client->dev, "%s - status [0x%02X]\n", __func__, ret);
+		input_info(true, &info->client->dev, "%s - status [0x%02X]\n", __func__, ret);
 	} else{
-		tsp_debug_err(true, &info->client->dev,
+		input_err(true, &info->client->dev,
 			"%s [ERROR] Unknown status [0x%02X]\n", __func__, ret);
 		goto ERROR;
 	}
@@ -344,15 +429,15 @@ int mms_get_ready_status(struct mms_ts_info *info)
 		wbuf[1] = MIP_R1_LOG_TRIGGER;
 		wbuf[2] = 0;
 		if (mms_i2c_write(info, wbuf, 3)) {
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
+			input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
 		}
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return ret;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
 
@@ -380,15 +465,15 @@ int mms_get_fw_version(struct mms_ts_info *info, u8 *ver_buf)
 	info->core_ver_ic = ver_buf[3];
 	info->config_ver_ic = ver_buf[5];
 
-	tsp_debug_info(true, &info->client->dev,
-			"%s: boot:%x.%x core:%x.%x custom:%x.%d parameter:%x.%x\n",
+	input_info(true, &info->client->dev,
+			"%s: boot:%x.%x core:%x.%x custom:%x.%x parameter:%x.%x\n",
 			__func__,ver_buf[0],ver_buf[1],ver_buf[2],ver_buf[3],ver_buf[4]
 			,ver_buf[5],ver_buf[6],ver_buf[7]);
 
 	return 0;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return 1;
 }
 
@@ -411,7 +496,7 @@ int mms_get_fw_version_u16(struct mms_ts_info *info, u16 *ver_buf_u16)
 	return 0;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return 1;
 }
 
@@ -423,31 +508,31 @@ int mms_disable_esd_alert(struct mms_ts_info *info)
 	u8 wbuf[4];
 	u8 rbuf[4];
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	wbuf[0] = MIP_R0_CTRL;
 	wbuf[1] = MIP_R1_CTRL_DISABLE_ESD_ALERT;
 	wbuf[2] = 1;
 	if (mms_i2c_write(info, wbuf, 3)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
 		goto ERROR;
 	}
 
 	if (mms_i2c_read(info, wbuf, 2, rbuf, 1)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_read\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_read\n", __func__);
 		goto ERROR;
 	}
 
 	if (rbuf[0] != 1) {
-		tsp_debug_info(true, &info->client->dev, "%s [ERROR] failed\n", __func__);
+		input_info(true, &info->client->dev, "%s [ERROR] failed\n", __func__);
 		goto ERROR;
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return 1;
 }
 
@@ -458,13 +543,13 @@ static int mms_alert_handler_esd(struct mms_ts_info *info, u8 *rbuf)
 {
 	u8 frame_cnt = rbuf[2];
 
-	tsp_debug_info(true, &info->client->dev, "%s [START] - frame_cnt[%d]\n",
+	input_info(true, &info->client->dev, "%s [START] - frame_cnt[%d]\n",
 		__func__, frame_cnt);
 
 	if (frame_cnt == 0) {
 		//sensor crack, not ESD
 		info->esd_cnt++;
-		tsp_debug_info(true, &info->client->dev, "%s - esd_cnt[%d]\n",
+		input_info(true, &info->client->dev, "%s - esd_cnt[%d]\n",
 			__func__, info->esd_cnt);
 
 		if (info->disable_esd == true) {
@@ -472,7 +557,7 @@ static int mms_alert_handler_esd(struct mms_ts_info *info, u8 *rbuf)
 		} else if (info->esd_cnt > ESD_COUNT_FOR_DISABLE) {
 			//Disable ESD alert
 			if (mms_disable_esd_alert(info))
-				tsp_debug_err(true, &info->client->dev,
+				input_err(true, &info->client->dev,
 					"%s - fail to disable esd alert\n", __func__);
 			else
 				info->disable_esd = true;
@@ -487,16 +572,16 @@ static int mms_alert_handler_esd(struct mms_ts_info *info, u8 *rbuf)
 		info->esd_cnt = 0;
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 }
 
-#ifdef CONFIG_VBUS_NOTIFIER
+#ifdef MMS_SUPPORT_TA_MODE
 int mms_charger_attached(struct mms_ts_info *info, bool status)
 {
 	u8 wbuf[4];
 
-	tsp_debug_info(true, &info->client->dev, "%s [START] %s\n", __func__, status ? "connected" : "disconnected");
+	input_info(true, &info->client->dev, "%s [START] %s\n", __func__, status ? "connected" : "disconnected");
 
 	wbuf[0] = MIP_R0_CTRL;
 	wbuf[1] = MIP_R1_CTRL_CHARGER_MODE;
@@ -504,13 +589,13 @@ int mms_charger_attached(struct mms_ts_info *info, bool status)
 
 	if ((status == 0) || (status == 1)) {
 		if (mms_i2c_write(info, wbuf, 3))
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
+			input_err(true, &info->client->dev, "%s [ERROR] mms_i2c_write\n", __func__);
 		else
-			tsp_debug_info(true, &info->client->dev, "%s - value[%d]\n", __func__, wbuf[2]);
+			input_info(true, &info->client->dev, "%s - value[%d]\n", __func__, wbuf[2]);
 	} else {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] Unknown value[%d]\n", __func__, status);
+		input_err(true, &info->client->dev, "%s [ERROR] Unknown value[%d]\n", __func__, status);
 	}
-	tsp_debug_dbg(true, &info->client->dev, "%s [DONE] \n", __func__);
+	input_dbg(true, &info->client->dev, "%s [DONE] \n", __func__);
 	return 0;
 }
 #endif
@@ -529,22 +614,25 @@ static irqreturn_t mms_interrupt(int irq, void *dev_id)
 	u8 category = 0;
 	u8 alert_type = 0;
 
-	tsp_debug_dbg(false, &client->dev, "%s [START]\n", __func__);
+	if (info->lowpower_mode)
+		pm_wakeup_event(info->input_dev->dev.parent, 1000);
+
+	input_dbg(true, &client->dev, "%s [START]\n", __func__);
 
 	//Read first packet
 	wbuf[0] = MIP_R0_EVENT;
 	wbuf[1] = MIP_R1_EVENT_PACKET_INFO;
 	if (mms_i2c_read(info, wbuf, 2, rbuf, (1 + event_size))) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] Read packet info\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] Read packet info\n", __func__);
 		goto ERROR;
 	}
 
-	tsp_debug_dbg(false, &client->dev, "%s - info [0x%02X]\n", __func__, rbuf[0]);
+	input_dbg(true, &client->dev, "%s - info [0x%02X]\n", __func__, rbuf[0]);
 
 	//Check event
 	size = (rbuf[0] & 0x7F);
 
-	tsp_debug_dbg(false, &client->dev, "%s - packet size [%d]\n", __func__, size);
+	input_dbg(true, &client->dev, "%s - packet size [%d]\n", __func__, size);
 
 	category = ((rbuf[0] >> 7) & 0x1);
 	if (category == 0) {
@@ -552,7 +640,7 @@ static irqreturn_t mms_interrupt(int irq, void *dev_id)
 		if (size > event_size) {
 			//Read next packet
 			if (mms_i2c_read_next(info, rbuf, (1 + event_size), (size - event_size))) {
-				tsp_debug_err(true, &client->dev, "%s [ERROR] Read next packet\n", __func__);
+				input_err(true, &client->dev, "%s [ERROR] Read next packet\n", __func__);
 				goto ERROR;
 			}
 		}
@@ -562,27 +650,37 @@ static irqreturn_t mms_interrupt(int irq, void *dev_id)
 		//Alert event
 		alert_type = rbuf[1];
 
-		tsp_debug_dbg(true, &client->dev, "%s - alert type [%d]\n", __func__, alert_type);
+		input_dbg(true, &client->dev, "%s - alert type [%d]\n", __func__, alert_type);
 
 		if (alert_type == MIP_ALERT_ESD) {
 			//ESD detection
 			if (mms_alert_handler_esd(info, rbuf)) {
 				goto ERROR;
 			}
+		} else if (alert_type == MIP_ALERT_WAKEUP) {
+			if (info->lowpower_flag & MMS_LPM_FLAG_SPAY) {
+				info->scrub_id = 0x04;
+				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+				input_sync(info->input_dev);
+				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
+				input_sync(info->input_dev);
+				input_info(true, &client->dev, "%s: [Gesture] Spay, flag%x\n",
+						__func__, info->lowpower_flag);
+			}
 		} else {
-			tsp_debug_err(true, &client->dev, "%s [ERROR] Unknown alert type [%d]\n",
+			input_err(true, &client->dev, "%s [ERROR] Unknown alert type [%d]\n",
 				__func__, alert_type);
 			goto ERROR;
 		}
 	}
 
-	tsp_debug_dbg(false, &client->dev, "%s [DONE]\n", __func__);
+	input_dbg(true, &client->dev, "%s [DONE]\n", __func__);
 	return IRQ_HANDLED;
 
 ERROR:
-	tsp_debug_err(true, &client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &client->dev, "%s [ERROR]\n", __func__);
 	if (RESET_ON_EVENT_ERROR) {
-		tsp_debug_info(true, &client->dev, "%s - Reset on error\n", __func__);
+		input_info(true, &client->dev, "%s - Reset on error\n", __func__);
 
 		mms_disable(info);
 		mms_clear_input(info);
@@ -604,7 +702,10 @@ int mms_fw_update_from_kernel(struct mms_ts_info *info, bool force)
 	int value;
 #endif
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	if (!fw_name)
+		goto ERROR;
+
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	//Disable IRQ
 	mutex_lock(&info->lock);
@@ -615,7 +716,7 @@ int mms_fw_update_from_kernel(struct mms_ts_info *info, bool force)
 	request_firmware(&fw, fw_name, &info->client->dev);
 
 	if (!fw) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] request_firmware\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] request_firmware\n", __func__);
 		goto ERROR;
 	}
 
@@ -628,14 +729,14 @@ int mms_fw_update_from_kernel(struct mms_ts_info *info, bool force)
 	} while (--retires);
 
 	if (!retires) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw failed\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw failed\n", __func__);
 		ret = -1;
 	}
 
 #ifdef CONFIG_DUAL_TSP
 	value = gpio_get_value(info->dtdata->tsp_sel);
 	gpio_direction_output(info->dtdata->tsp_sel, !value);
-	tsp_debug_info(true, &info->client->dev, "%s mms_flash_fw TSP%d\n", __func__, !value);
+	input_info(true, &info->client->dev, "%s mms_flash_fw TSP%d\n", __func__, !value);
 	retires = 6;
 	udelay(500);
 	//Double TSP need update fw
@@ -647,12 +748,12 @@ int mms_fw_update_from_kernel(struct mms_ts_info *info, bool force)
 	} while (--retires);
 
 	if (!retires) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw TSP%d failed\n", __func__, !value);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw TSP%d failed\n", __func__, !value);
 		ret = -1;
 	}
 	gpio_direction_output(info->dtdata->tsp_sel, value);
 	udelay(500);
-	tsp_debug_info(true, &info->client->dev, "%s mms_flash_fw TSP%d\n", __func__, value);
+	input_info(true, &info->client->dev, "%s mms_flash_fw TSP%d\n", __func__, value);
 #endif
 
 	release_firmware(fw);
@@ -665,11 +766,11 @@ int mms_fw_update_from_kernel(struct mms_ts_info *info, bool force)
 		goto ERROR;
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
 ERROR:
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
 
@@ -683,7 +784,7 @@ int mms_fw_update_from_storage(struct mms_ts_info *info, bool force)
 	size_t fw_size, nread;
 	int ret = 0;
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	//Disable IRQ
 	mutex_lock(&info->lock);
@@ -695,7 +796,7 @@ int mms_fw_update_from_storage(struct mms_ts_info *info, bool force)
 	set_fs(KERNEL_DS);
 	fp = filp_open(EXTERNAL_FW_PATH, O_RDONLY, S_IRUSR);
 	if (IS_ERR(fp)) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] file_open - path[%s]\n",
+		input_err(true, &info->client->dev, "%s [ERROR] file_open - path[%s]\n",
 			__func__, EXTERNAL_FW_PATH);
 		ret = fw_err_file_open;
 		goto ERROR;
@@ -706,11 +807,11 @@ int mms_fw_update_from_storage(struct mms_ts_info *info, bool force)
 		unsigned char *fw_data;
 		fw_data = kzalloc(fw_size, GFP_KERNEL);
 		nread = vfs_read(fp, (char __user *)fw_data, fw_size, &fp->f_pos);
-		tsp_debug_info(true, &info->client->dev, "%s - path [%s] size [%zu]\n",
+		input_info(true, &info->client->dev, "%s - path [%s] size [%zu]\n",
 			__func__,EXTERNAL_FW_PATH, fw_size);
 
 		if (nread != fw_size) {
-			tsp_debug_err(true, &info->client->dev, "%s [ERROR] vfs_read - size[%zu] read[%zu]\n",
+			input_err(true, &info->client->dev, "%s [ERROR] vfs_read - size[%zu] read[%zu]\n",
 				__func__, fw_size, nread);
 			ret = fw_err_file_read;
 		} else {
@@ -720,7 +821,7 @@ int mms_fw_update_from_storage(struct mms_ts_info *info, bool force)
 
 		kfree(fw_data);
 	} else {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] fw_size [%zu]\n", __func__, fw_size);
+		input_err(true, &info->client->dev, "%s [ERROR] fw_size [%zu]\n", __func__, fw_size);
 		ret = fw_err_file_read;
 	}
 
@@ -734,9 +835,9 @@ ERROR:
 	mutex_unlock(&info->lock);
 
 	if (ret == 0)
-		tsp_debug_err(true, &info->client->dev, "%s [DONE]\n", __func__);
+		input_err(true, &info->client->dev, "%s [DONE]\n", __func__);
 	else
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] %d\n", __func__, ret);
+		input_err(true, &info->client->dev, "%s [ERROR] %d\n", __func__, ret);
 
 	return ret;
 }
@@ -749,7 +850,7 @@ int mms_fw_update_from_ffu(struct mms_ts_info *info, bool force)
 	int retires = 3;
 	int ret;
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	//Disable IRQ
 	mutex_lock(&info->lock);
@@ -760,7 +861,7 @@ int mms_fw_update_from_ffu(struct mms_ts_info *info, bool force)
 	request_firmware(&fw, FFU_FW_PATH, &info->client->dev);
 
 	if (!fw) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] request_firmware\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] request_firmware\n", __func__);
 		goto ERROR;
 	}
 
@@ -773,7 +874,7 @@ int mms_fw_update_from_ffu(struct mms_ts_info *info, bool force)
 	} while (--retires);
 
 	if (!retires) {
-		tsp_debug_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw failed\n", __func__);
+		input_err(true, &info->client->dev, "%s [ERROR] mms_flash_fw failed\n", __func__);
 		ret = -1;
 	}
 
@@ -787,13 +888,13 @@ int mms_fw_update_from_ffu(struct mms_ts_info *info, bool force)
 		goto ERROR;
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
 ERROR:
 	enable_irq(info->client->irq);
 	mutex_unlock(&info->lock);
-	tsp_debug_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
+	input_err(true, &info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
 
@@ -808,7 +909,7 @@ static ssize_t mms_sys_fw_update(struct device *dev,
 
 	memset(info->print_buf, 0, PAGE_SIZE);
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	ret = mms_fw_update_from_storage(info, true);
 
@@ -836,7 +937,7 @@ static ssize_t mms_sys_fw_update(struct device *dev,
 		break;
 	}
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 
 	strcat(info->print_buf, data);
 	result = snprintf(buf, PAGE_SIZE, "%s\n", info->print_buf);
@@ -870,7 +971,7 @@ void mms_set_tsp_info(struct mms_ts_info *mms_data)
 	if (mms_data != NULL)
 		tsp_driver = mms_data;
 	else
-		tsp_debug_info(true, &mms_data->client->dev,"%s : tsp info is null\n", __func__);
+		input_info(true, &mms_data->client->dev,"%s : tsp info is null\n", __func__);
 }
 static struct mms_ts_info *mms_get_tsp_info(void)
 {
@@ -885,7 +986,7 @@ static void mms_switching_tsp_work(struct work_struct *work)
 
 
 	if (mms_data == NULL){
-		tsp_debug_info(true, &mms_data->client->dev,"[TSP] %s: tsp info is null\n", __func__);
+		input_info(true, &mms_data->client->dev,"[TSP] %s: tsp info is null\n", __func__);
 		return;
 	}
 
@@ -895,7 +996,7 @@ static void mms_switching_tsp_work(struct work_struct *work)
 	{
 		mutex_lock(&mms_data->mms_switching_mutex);
 		mms_data->flip_status = mms_data->flip_status_current;
-		tsp_debug_info(true, &mms_data->client->dev,
+		input_info(true, &mms_data->client->dev,
 			"%s : flip %sed. using TSP_%s\n",
 			__func__, mms_data->flip_status_current? "clos":"open",
 			mms_data->flip_status_current ? "SUB":"MAIN");
@@ -911,7 +1012,7 @@ static int mms_hall_ic_notify(struct notifier_block *nb,
 {
 	struct mms_ts_info *mms_data = mms_get_tsp_info();
 
-	tsp_debug_info(true, &mms_data->client->dev,"%s %s\n", __func__, flip_cover ? "close" : "open");
+	input_info(true, &mms_data->client->dev,"%s %s\n", __func__, flip_cover ? "close" : "open");
 
 	mms_data->flip_status_current = flip_cover;
 
@@ -928,14 +1029,14 @@ static int mms_init_config(struct mms_ts_info *info)
 	u8 rbuf[32];
 	u8 tmp[4] = MMS_CONFIG_DATE;
 
-	tsp_debug_info(true, &info->client->dev, "%s [START]\n", __func__);
+	input_info(true, &info->client->dev, "%s [START]\n", __func__);
 
 	/* read product name */
 	wbuf[0] = MIP_R0_INFO;
 	wbuf[1] = MIP_R1_INFO_PRODUCT_NAME;
 	mms_i2c_read(info, wbuf, 2, rbuf, 16);
 	memcpy(info->product_name, rbuf, 16);
-	tsp_debug_info(true, &info->client->dev, "%s - product_name[%s]\n",
+	input_info(true, &info->client->dev, "%s - product_name[%s]\n",
 		__func__, info->product_name);
 
 	/* read fw version */
@@ -953,7 +1054,7 @@ static int mms_init_config(struct mms_ts_info *info)
 	info->fw_month = rbuf[2];
 	info->fw_date = rbuf[3];
 
-	tsp_debug_info(true, &info->client->dev, "%s - fw build date : %d/%d/%d\n",
+	input_info(true, &info->client->dev, "%s - fw build date : %d/%d/%d\n",
 		__func__, info->fw_year, info->fw_month, info->fw_date);
 
 	/* read checksum */
@@ -963,7 +1064,7 @@ static int mms_init_config(struct mms_ts_info *info)
 
 	info->pre_chksum = (rbuf[0] << 8) | (rbuf[1]);
 	info->rt_chksum = (rbuf[2] << 8) | (rbuf[3]);
-	tsp_debug_info(true, &info->client->dev,
+	input_info(true, &info->client->dev,
 		"%s - precalced checksum:%04X, real-time checksum:%04X\n",
 		__func__, info->pre_chksum, info->rt_chksum);
 
@@ -975,13 +1076,13 @@ static int mms_init_config(struct mms_ts_info *info)
 
 	info->max_x = (rbuf[0]) | (rbuf[1] << 8);
 	info->max_y = (rbuf[2]) | (rbuf[3] << 8);
-	tsp_debug_info(true, &info->client->dev, "%s - max_x[%d] max_y[%d]\n",
+	input_info(true, &info->client->dev, "%s - max_x[%d] max_y[%d]\n",
 		__func__, info->max_x, info->max_y);
 
 	info->node_x = rbuf[4];
 	info->node_y = rbuf[5];
 	info->node_key = rbuf[6];
-	tsp_debug_info(true, &info->client->dev, "%s - node_x[%d] node_y[%d] node_key[%d]\n",
+	input_info(true, &info->client->dev, "%s - node_x[%d] node_y[%d] node_key[%d]\n",
 		__func__, info->node_x, info->node_y, info->node_key);
 
 #if MMS_USE_TOUCHKEY
@@ -990,9 +1091,9 @@ static int mms_init_config(struct mms_ts_info *info)
 		info->tkey_enable = true;
 	}
 #endif
-	info->event_size = 8;
+	info->event_size = MMS_DEFAULT_EVENT_SIZE;
 
-	tsp_debug_info(true, &info->client->dev, "%s [DONE]\n", __func__);
+	input_info(true, &info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 }
 
@@ -1006,18 +1107,18 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct input_dev *input_dev;
 	int ret = 0;
 
-	tsp_debug_err(true, &client->dev, "%s [START]\n", __func__);
+	input_err(true, &client->dev, "%s [START]\n", __func__);
 
 #ifdef CONFIG_BATTERY_SAMSUNG
 	if (lpcharge == 1) {
-		tsp_debug_err(true, &client->dev, "%s : Do not load driver due to : lpm %d\n",
+		input_err(true, &client->dev, "%s : Do not load driver due to : lpm %d\n",
 			 __func__, lpcharge);
 		return -ENODEV;
 	}
 #endif
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_I2C)) {
-		tsp_debug_err(true, &client->dev,
+		input_err(true, &client->dev,
 			"%s [ERROR] i2c_check_functionality\n", __func__);
 		ret = -EIO;
 		goto ERROR;
@@ -1025,14 +1126,14 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	info = kzalloc(sizeof(struct mms_ts_info), GFP_KERNEL);
 	if (!info) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] info alloc\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] info alloc\n", __func__);
 		ret = -ENOMEM;
 		goto err_mem_alloc;
 	}
 
 	input_dev = input_allocate_device();
 	if (!input_dev) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] input alloc\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] input alloc\n", __func__);
 		ret = -ENOMEM;
 		goto err_input_alloc;
 	}
@@ -1056,7 +1157,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			devm_kzalloc(&client->dev,
 				sizeof(struct mms_devicetree_data), GFP_KERNEL);
 		if (!info->dtdata) {
-			tsp_debug_err(true, &client->dev,
+			input_err(true, &client->dev,
 				"%s [ERROR] dtdata devm_kzalloc\n", __func__);
 			goto err_devm_alloc;
 		}
@@ -1066,7 +1167,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	{
 		info->dtdata = client->dev.platform_data;
 		if (info->dtdata == NULL) {
-			tsp_debug_err(true, &client->dev, "%s [ERROR] dtdata is null\n", __func__);
+			input_err(true, &client->dev, "%s [ERROR] dtdata is null\n", __func__);
 			ret = -EINVAL;
 			goto err_platform_data;
 		}
@@ -1074,10 +1175,14 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	info->pinctrl = devm_pinctrl_get(&client->dev);
 	if (IS_ERR(info->pinctrl)) {
-		tsp_debug_err(true, &client->dev, "%s: Failed to get pinctrl data\n", __func__);
+		input_err(true, &client->dev, "%s: Failed to get pinctrl data\n", __func__);
 		ret = PTR_ERR(info->pinctrl);
 		goto err_platform_data;
 	}
+
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	tui_tsp_info = info;
+#endif
 
 	snprintf(info->phys, sizeof(info->phys), "%s/input0", dev_name(&client->dev));
 	input_dev->name = "sec_touchscreen";
@@ -1096,7 +1201,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	ret = input_register_device(input_dev);
 	if (ret) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] input_register_device\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] input_register_device\n", __func__);
 		ret = -EIO;
 		goto err_input_register_device;
 	}
@@ -1108,7 +1213,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		info->hall_ic_nb.priority = 1;
 		info->hall_ic_nb.notifier_call = mms_hall_ic_notify;
 		hall_ic_register_notify(&info->hall_ic_nb);
-		tsp_debug_info(true,&client->dev, "%s,touchkey:hall ic register",__func__);
+		input_info(true,&client->dev, "%s,touchkey:hall ic register",__func__);
 #endif
 
 	mms_power_control(info, 1);
@@ -1116,7 +1221,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 #if MMS_USE_AUTO_FW_UPDATE
 	ret = mms_fw_update_from_kernel(info, false);
 	if(ret){
-		tsp_debug_err(true, &client->dev, "%s [ERROR] mms_fw_update_from_kernel\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] mms_fw_update_from_kernel\n", __func__);
 	}
 #endif
 
@@ -1129,7 +1234,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	if (info->register_cb)
 		info->register_cb(&info->callbacks);
 #endif
-#ifdef CONFIG_VBUS_NOTIFIER
+#ifdef MMS_SUPPORT_TA_MODE
 	vbus_notifier_register(&info->vbus_nb, mms_vbus_notification,
 				VBUS_NOTIFY_DEV_CHARGER);
 #endif
@@ -1137,23 +1242,26 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	ret = request_threaded_irq(client->irq, NULL, mms_interrupt,
 			IRQF_TRIGGER_LOW | IRQF_ONESHOT, MMS_DEVICE_NAME, info);
 	if (ret) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] request_threaded_irq\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] request_threaded_irq\n", __func__);
 		goto err_request_irq;
 	}
 
 	disable_irq(client->irq);
 	info->irq = client->irq;
 
-#if MMS_USE_NAP_MODE
-	//Wake lock for nap mode
-	wake_lock_init(&mms_wake_lock, WAKE_LOCK_SUSPEND, "mms_wake_lock");
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+	trustedui_set_tsp_irq(info->irq);
+	dev_err(&client->dev, "%s[%d] called!\n",
+		__func__, info->irq);
 #endif
+
+	wake_lock_init(&info->wakelock, WAKE_LOCK_SUSPEND, "mms_wakelock");
 
 	mms_enable(info);
 
 #if MMS_USE_DEV_MODE
 	if(mms_dev_create(info)){
-		tsp_debug_err(true, &client->dev, "%s [ERROR] mms_dev_create\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] mms_dev_create\n", __func__);
 		ret = -EAGAIN;
 		goto err_test_dev_create;
 	}
@@ -1164,7 +1272,7 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 #if MMS_USE_TEST_MODE
 	if (mms_sysfs_create(info)){
-		tsp_debug_err(true, &client->dev, "%s [ERROR] mms_sysfs_create\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] mms_sysfs_create\n", __func__);
 		ret = -EAGAIN;
 		goto err_test_sysfs_create;
 	}
@@ -1172,20 +1280,20 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 #if MMS_USE_CMD_MODE
 	if (mms_sysfs_cmd_create(info)){
-		tsp_debug_err(true, &client->dev, "%s [ERROR] mms_sysfs_cmd_create\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] mms_sysfs_cmd_create\n", __func__);
 		ret = -EAGAIN;
 		goto err_fac_cmd_create;
 	}
 #endif
 
 	if (sysfs_create_group(&client->dev.kobj, &mms_attr_group)) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] sysfs_create_group\n", __func__);
 		ret = -EAGAIN;
 		goto err_create_attr_group;
 	}
 
 	if (sysfs_create_link(NULL, &client->dev.kobj, MMS_DEVICE_NAME)) {
-		tsp_debug_err(true, &client->dev, "%s [ERROR] sysfs_create_link\n", __func__);
+		input_err(true, &client->dev, "%s [ERROR] sysfs_create_link\n", __func__);
 		ret = -EAGAIN;
 		goto err_create_dev_link;
 	}
@@ -1194,8 +1302,9 @@ static int mms_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	INIT_DELAYED_WORK(&info->ghost_check, mms_ghost_touch_check);
 	p_ghost_check = &info->ghost_check;
 #endif
+	device_init_wakeup(&client->dev, true);
 	info->init = false;
-	tsp_debug_info(true, &client->dev,
+	input_info(true, &client->dev,
 		"MELFAS " CHIP_NAME " Touchscreen is initialized successfully\n");
 	return 0;
 
@@ -1218,6 +1327,7 @@ err_test_dev_create:
 #endif
 	mms_disable(info);
 	free_irq(info->irq, info);
+	wake_lock_destroy(&info->wakelock);
 err_request_irq:
 	input_unregister_device(info->input_dev);
 	info->input_dev = NULL;
@@ -1236,6 +1346,13 @@ ERROR:
 	return ret;
 }
 
+#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
+void trustedui_mode_on(void){
+	dev_err(&tui_tsp_info->client->dev, "%s, release all finger..\n",	__func__);
+	mms_clear_input(tui_tsp_info);
+}
+#endif
+
 /**
  * Remove driver
  */
@@ -1246,6 +1363,8 @@ static int mms_remove(struct i2c_client *client)
 	if (info->irq >= 0) {
 		free_irq(info->irq, info);
 	}
+
+	wake_lock_destroy(&info->wakelock);
 
 #if MMS_USE_CMD_MODE
 	mms_sysfs_cmd_remove(info);
@@ -1329,12 +1448,12 @@ static int __init mms_init(void)
 		//return 0;
 	//}
 #endif
-#if 0
+
 	if (!lcdid) {
-			pr_notice("%s: LCD is not attached\n", __func__);
-			return 0;
-		}
-#endif
+		pr_notice("%s: LCD is not attached\n", __func__);
+		return 0;
+	}
+
 	return i2c_add_driver(&mms_driver);
 }
 

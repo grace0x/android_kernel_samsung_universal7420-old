@@ -73,6 +73,7 @@
 #define MFC_BASE_MASK		((1 << 17) - 1)
 
 #define FLAG_LAST_FRAME		0x80000000
+#define FLAG_CSD		0x20000000
 #define MFC_MAX_INTERVAL	(2 * USEC_PER_SEC)
 
 /* Maximum number of temporal layers */
@@ -141,6 +142,8 @@ enum s5p_mfc_inst_state {
 	MFCINST_ABORT_INST,
 	MFCINST_DPB_FLUSHING,
 	MFCINST_VPS_PARSED_ONLY,
+	MFCINST_SPECIAL_PARSING,
+	MFCINST_SPECIAL_PARSING_NAL,
 };
 
 /**
@@ -357,6 +360,7 @@ struct s5p_mfc_dev {
 	int curr_ctx;
 	int preempt_ctx;
 	unsigned long ctx_work_bits;
+	unsigned long ctx_stop_bits;
 
 	atomic_t watchdog_cnt;
 	atomic_t watchdog_run;
@@ -1142,8 +1146,13 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 	  (ctx->state == MFCINST_RUNNING)) &&	\
 	 test_bit(ctx->num, &ctx->dev->hw_lock))
 #define need_to_wait_nal_abort(ctx)		 \
-	(((ctx->state == MFCINST_ABORT_INST)) && \
-	 test_bit(ctx->num, &ctx->dev->hw_lock))
+	(ctx->state == MFCINST_ABORT_INST)
+#define need_to_special_parsing(ctx)		\
+	((ctx->state == MFCINST_GOT_INST) ||	\
+	 (ctx->state == MFCINST_HEAD_PARSED))
+#define need_to_special_parsing_nal(ctx)	\
+	((ctx->state == MFCINST_RUNNING) ||	\
+	 (ctx->state == MFCINST_ABORT))
 
 /* Extra information for Decoder */
 #define	DEC_SET_DUAL_DPB		(1 << 0)

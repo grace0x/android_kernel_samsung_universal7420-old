@@ -157,6 +157,7 @@ struct samsung_dma_ops {
 	int (*getposition)(unsigned long ch, dma_addr_t *src, dma_addr_t *dst);
 	int (*flush)(unsigned long ch);
 	int (*stop)(unsigned long ch);
+	int (*debug)(unsigned long ch);
 };
 
 extern void *samsung_dmadev_get_ops(void);

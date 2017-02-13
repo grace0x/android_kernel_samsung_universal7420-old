@@ -1216,10 +1216,28 @@ static void wq_func_subdev(struct fimc_is_subdev *leader,
 	BUG_ON(!sub_frame);
 
 	ldr_vctx = leader->vctx;
+	if (unlikely(!ldr_vctx)) {
+		mserr("ldr_vctx is NULL", subdev, subdev);
+		return;
+	}
+
 	sub_vctx = subdev->vctx;
+	if (unlikely(!sub_vctx)) {
+		mserr("ldr_vctx is NULL", subdev, subdev);
+		return;
+	}
 
 	ldr_framemgr = GET_FRAMEMGR(ldr_vctx);
+	if (unlikely(!ldr_framemgr)) {
+		mserr("ldr_framemgr is NULL", subdev, subdev);
+		return;
+	}
+
 	sub_framemgr = GET_FRAMEMGR(sub_vctx);
+	if (unlikely(!sub_framemgr)) {
+		mserr("sub_framemgr is NULL", subdev, subdev);
+		return;
+	}
 
 	findex = sub_frame->stream->findex;
 	mindex = ldr_vctx->queue.buf_maxcount;
@@ -2422,25 +2440,37 @@ static void interface_timer(unsigned long data)
 
 			if (test_bit(FIMC_IS_GROUP_START, &device->group_3aa.state)) {
 				framemgr = GET_SUBDEV_FRAMEMGR(&device->group_3aa.leader);
-				framemgr_e_barrier_irqs(framemgr, FMGR_IDX_6, flags);
-				scount_3ax = framemgr->frame_pro_cnt;
-				shot_count += scount_3ax;
-				framemgr_x_barrier_irqr(framemgr, FMGR_IDX_6, flags);
+				if (framemgr) {
+					framemgr_e_barrier_irqs(framemgr, FMGR_IDX_6, flags);
+					scount_3ax = framemgr->frame_pro_cnt;
+					shot_count += scount_3ax;
+					framemgr_x_barrier_irqr(framemgr, FMGR_IDX_6, flags);
+				} else {
+					minfo("\n### 3aa framemgr is null ###\n", device);
+				}
 			}
 
 			if (test_bit(FIMC_IS_GROUP_START, &device->group_isp.state)) {
 				framemgr = GET_SUBDEV_FRAMEMGR(&device->group_isp.leader);
-				framemgr_e_barrier_irqs(framemgr, FMGR_IDX_7, flags);
-				scount_isp = framemgr->frame_pro_cnt;
-				shot_count += scount_isp;
-				framemgr_x_barrier_irqr(framemgr, FMGR_IDX_7, flags);
+				if (framemgr) {
+					framemgr_e_barrier_irqs(framemgr, FMGR_IDX_7, flags);
+					scount_isp = framemgr->frame_pro_cnt;
+					shot_count += scount_isp;
+					framemgr_x_barrier_irqr(framemgr, FMGR_IDX_7, flags);
+				} else {
+					minfo("\n### isp framemgr is null ###\n", device);
+				}
 			}
 
 			if (test_bit(FIMC_IS_GROUP_START, &device->group_dis.state)) {
 				framemgr = GET_SUBDEV_FRAMEMGR(&device->group_dis.leader);
-				framemgr_e_barrier_irqs(framemgr, FMGR_IDX_8, flags);
-				shot_count += framemgr->frame_pro_cnt;
-				framemgr_x_barrier_irqr(framemgr, FMGR_IDX_8, flags);
+				if (framemgr) {
+					framemgr_e_barrier_irqs(framemgr, FMGR_IDX_8, flags);
+					shot_count += framemgr->frame_pro_cnt;
+					framemgr_x_barrier_irqr(framemgr, FMGR_IDX_8, flags);
+				} else {
+					minfo("\n### dis framemgr is null ###\n", device);
+				}
 			}
 		}
 

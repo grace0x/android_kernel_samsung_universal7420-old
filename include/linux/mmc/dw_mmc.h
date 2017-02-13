@@ -281,6 +281,7 @@ struct dw_mci {
 	struct tasklet_struct	tasklet;
 	u32			tasklet_state;
 	struct work_struct	card_work;
+	u32			card_detect_cnt;
 	unsigned long		pending_events;
 	unsigned long		completed_events;
 	enum dw_mci_state	state;
@@ -307,6 +308,10 @@ struct dw_mci {
 	atomic_t		biu_en_win;
 	atomic_t		ciu_en_win;
 	struct dw_mci_slot	*slot[MAX_MCI_SLOTS];
+
+	/* pinctrl handles */
+	struct pinctrl		*pinctrl;
+	struct pinctrl_state	*pins_direction;
 
 	/* FIFO push and pull */
 	int			fifo_depth;
@@ -344,12 +349,19 @@ struct dw_mci {
 	struct regulator	*vqmmc;
 	unsigned long		irq_flags; /* IRQ flags */
 	int			irq;
+	int			cd_irq;
 
 	/* Save request status */
 #define DW_MMC_REQ_IDLE		0
 #define DW_MMC_REQ_BUSY		1
 	unsigned int		req_state;
 	struct dw_mci_debug_info	*debug_info;	/* debug info */
+
+	/* Sfr dump */
+	struct dw_mci_sfr_ram_dump      *sfr_dump;
+
+	unsigned long cp_event;
+	struct notifier_block modemif_nb;
 };
 
 /* DMA ops for Internal/External DMAC interface */
@@ -484,12 +496,17 @@ struct dw_mci_board {
 	*       dev is pointer to platform device of the host controller,
 	*       state is new state of the card (0 - removed, 1 - inserted).
 	*/
-
+#if defined(CONFIG_BCM43455) || defined (CONFIG_BCM43455_MODULE)
+	int (*ext_cd_init)(void (*notify_func)
+			(void *dev_id, int state), void *dev_id, struct mmc_host *mmc);
+	int (*ext_cd_cleanup)(void (*notify_func)
+			(void *dev_id, int state), void *dev_id);
+#else /* CONFIG_BCM43455 || CONFIG_BCM43455_MODULE */
 	int (*ext_cd_init)(void (*notify_func)
 			(struct platform_device *, int state));
 	int (*ext_cd_cleanup)(void (*notify_func)
 			(struct platform_device *, int state));
-
+#endif /* CONFIG_BCM43455 || CONFIG_BCM43455_MODULE */
 	/*
 	 * Enable power to selected slot and set voltage to desired level.
 	 * Voltage levels are specified using MMC_VDD_xxx defines defined
@@ -504,11 +521,20 @@ struct dw_mci_board {
 	struct block_settings *blk_settings;
 	struct dw_mci_mon_table *tp_mon_tbl;
 	unsigned int sw_timeout;
+
+	/* DATA_TIMEOUT[31:11] of TMOUT */
+	u32 data_timeout;	
 	bool use_gate_clock;
 	bool use_biu_gate_clock;
 	bool enable_cclk_on_suspend;
 	bool on_suspend;
 	unsigned int dev_drv_str;
+	void (*ext_setpower)(struct dw_mci *host, u32 flag);
+		/* host->vmmc : SDcard power */
+#define DW_MMC_EXT_VMMC_ON 		BIT(0)
+	/* host->vqmmc : SDcard I/F power */
+#define DW_MMC_EXT_VQMMC_ON		BIT(1)
+#define DW_MMC_EXT_ALL_OFF		BIT(2)
 };
 
 #endif /* LINUX_MMC_DW_MMC_H */

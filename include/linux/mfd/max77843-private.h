@@ -117,6 +117,7 @@ enum max77843_fuelgauge_reg {
 	TIME_TO_FULL_REG                             = 0x20,
 	QRTABLE10_REG                                = 0x22,
 	FULLCAP_NOM_REG                              = 0x23,
+	FILTER_CFG_REG                               = 0x29,
 	MISCCFG_REG                                  = 0x2B,
 	QRTABLE20_REG                                = 0x32,
 	FULLCAPREP_REG                               = 0x35,

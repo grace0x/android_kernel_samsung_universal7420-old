@@ -611,6 +611,14 @@ config MMC_DW_PCI
 
 	  If unsure, say N.
 
+config MMC_DW_FORCE_32BIT_SFR_RW
+	bool "Force to use 32bit rw for 64bit SFR rw"
+	depends on MMC_DW
+	help
+	  This selects converting 64bit SFR read/write by two separate 32bit
+	  read/write when 64bit read/write is not allowed for SFR on some DW
+	  MMC implementation. Consider using this with FIFO SFR on PIO mode.
+
 config MMC_SH_MMCIF
 	tristate "SuperH Internal MMCIF support"
 	depends on MMC_BLOCK && (SUPERH || ARCH_SHMOBILE)

@@ -7125,6 +7125,10 @@ wl_cfg80211_bcn_validate_sec(
 
 		WL_DBG(("SoftAP: validating security"));
 		/* If wpa2_ie or wpa_ie is present validate it */
+		if (cfg->ap_info == NULL) {
+			WL_ERR(("SoftAP: ap_info is NULL!!"));
+			return BCME_ERROR;
+		}
 
 		if ((ies->wpa2_ie || ies->wpa_ie) &&
 			((wl_validate_wpa2ie(dev, ies->wpa2_ie, bssidx)  < 0 ||

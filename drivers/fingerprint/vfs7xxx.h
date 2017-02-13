@@ -145,11 +145,29 @@
  * @tx_buffer:pointer to transmitted data
  * @len:transmitted/retrieved data size
  */
+#ifdef CONFIG_SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+/*
+* Platform supports only 32 bits.
+*/
 struct vfsspi_ioctl_transfer {
+	u32 rx_buffer;
+	u32 tx_buffer;
+	u32 len;
+};
+#else
+ struct vfsspi_ioctl_transfer {
 	unsigned char *rx_buffer;
 	unsigned char *tx_buffer;
 	unsigned int len;
 };
+#endif
+
+/* used for WoG mode */
+extern void vfsspi_fp_homekey_ev(void);
+/* export variable for signaling */
+EXPORT_SYMBOL(vfsspi_fp_homekey_ev);
+extern int vfsspi_goto_suspend;
+EXPORT_SYMBOL(vfsspi_goto_suspend);
 #endif
 
 /*

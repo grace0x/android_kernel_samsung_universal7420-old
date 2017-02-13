@@ -572,6 +572,8 @@ static int max77833_fg_read_current(struct max77833_fuelgauge_data *fuelgauge, i
 	if (sign)
 		i_current *= -1;
 
+	pr_debug("%s: current=%d\n", __func__, i_current);
+
 	return i_current;
 }
 
@@ -615,6 +617,8 @@ static int max77833_fg_read_avg_current(struct max77833_fuelgauge_data *fuelgaug
 		avg_current = 1;
 		cnt++;
 	}
+
+	pr_debug("%s: avg_current=%d\n", __func__, avg_current);
 
 	return avg_current;
 }
@@ -1617,7 +1621,7 @@ static int calc_ttf(struct max77833_fuelgauge_data *fuelgauge, union power_suppl
 	if (i == fuelgauge->cv_data_lenth)
 		i = fuelgauge->cv_data_lenth-1;
 
-	if (cv_data[i].soc  < soc) {
+	if (cv_data[i].soc < soc || !strcmp(chg_val2.strval, "EOC")) {
 		for (i = 0; i < fuelgauge->cv_data_lenth; i++) {
 			if (soc <= cv_data[i].soc)
 				break;
@@ -1902,6 +1906,14 @@ static int max77833_fg_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		return -ENODATA;
 #endif
+	case POWER_SUPPLY_PROP_FILTER_CFG:
+		{
+			u16 status_data;
+			max77833_read_fg(fuelgauge->i2c, FILTER_CFG_REG, &status_data);
+			val->intval = status_data;
+			pr_debug("%s: FilterCFG=0x%04X\n", __func__, status_data);
+			break;
+		}
 	default:
 		return -EINVAL;
 	}
@@ -2025,6 +2037,20 @@ static int max77833_fg_set_property(struct power_supply *psy,
 		}
 		break;
 #endif
+	case POWER_SUPPLY_PROP_FILTER_CFG:
+		{
+			u16 status_data;
+			/* Set FilterCFG */
+			max77833_read_fg(fuelgauge->i2c, FILTER_CFG_REG, &status_data);
+			pr_debug("%s: FilterCFG=0x%04X\n", __func__, status_data);
+			status_data &= ~0xF;
+			status_data |= (val->intval & 0xF);
+			max77833_write_fg(fuelgauge->i2c, FILTER_CFG_REG, status_data);
+
+			max77833_read_fg(fuelgauge->i2c, FILTER_CFG_REG, &status_data);
+			pr_debug("%s: FilterCFG=0x%04X\n", __func__, status_data);
+			break;
+		}
 	default:
 		return -EINVAL;
 	}

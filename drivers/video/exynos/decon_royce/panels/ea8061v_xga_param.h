@@ -4,6 +4,14 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 
+#define cmd_err_check(c, r, e) \
+do { \
+	if (r < 0) { \
+		dsim_err("%s : fail to write %s\n", __func__,#c); \
+		goto e; \
+	} \
+} while (0)
+
 struct lcd_seq_info {
 	unsigned char	*cmd;
 	unsigned int	len;
@@ -77,17 +85,7 @@ static const unsigned char EA8061V_BL_CTRL_B6[] = {
 	0xB6,
 	0x58, 0x8A
 };
-/*
-static const unsigned char EA8061V_BL_CTRL_B5[] = {
-	0xB5,
-	0x21,
-};
 
-static const unsigned char EA8061V_SEQ_ACL_OFF_55[] = {
-	0x55,
-	0x02,
-};
-*/
 static const unsigned char EA8061V_SEQ_GAMMA_UPDATE_F7[] = {
 	0xF7,
 	0x01
@@ -114,6 +112,7 @@ static const unsigned char EA8061V_SEQ_ACL_OFF[] = {
 	0x55,
 	0x00
 };
+
 static const unsigned char EA8061V_SEQ_ACL_15[] = {
 	0x55,
 	0x01,
@@ -139,21 +138,18 @@ static const unsigned char EA8061V_SEQ_HBM_PARA_SKIP[] = {
 	0x03 /* skip 3 para.*/
 };
 
-static const unsigned char EA8061V_SEQ_HBM[] = {
-	0xB6,
-	0x00 /* write C8h 40th para to B6 4th para*/
-};
 
 
 #define POWER_IS_ON(pwr)			(pwr <= FB_BLANK_NORMAL)
-#define LEVEL_IS_HBM(level)			(level >= 6)
+#define LEVEL_IS_HBM(brightness)		(brightness == EXTEND_BRIGHTNESS)
 #define UNDER_MINUS_20(temperature)	(temperature <= -20)
 #define UNDER_0(temperature)	(temperature <= 0)
 
-#define ACL_IS_ON(nit) 				(nit < 360)
+#define ACL_IS_ON(nit) 				(nit != 360)
 #define CAPS_IS_ON(level)	(level >= 41)
 
 #define NORMAL_TEMPERATURE			25	/* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS			355
 #define UI_MAX_BRIGHTNESS 			255
 #define UI_MIN_BRIGHTNESS 			0
 #define UI_DEFAULT_BRIGHTNESS 		134
@@ -176,14 +172,9 @@ static const unsigned char EA8061V_SEQ_HBM[] = {
 #define EA8061V_CODE_LEN		5
 
 
-#define EA8061V_HBMGAMMA_REG		0xC8
+#define EA8061V_HBMGAMMA_REG		0xCA
 #define EA8061V_HBMGAMMA_LEN		33
 
-#define EA8061V_MAX_BRIGHTNESS	360
-#define EA8061V_HBM_BRIGHTNESS	600
-
-#define EA8061V_HBM_ELVSS_INDEX		21
-#define EA8061V_HBM_ELVSS_COMP		0x06
 
 #define AID_CMD_CNT					5
 #define ELVSS_CMD_CNT				3
@@ -192,16 +183,12 @@ static const unsigned char EA8061V_SEQ_HBM[] = {
 #define ELVSS_LEN					23	/* elvss: Global para 22th */
 
 #define TSET_REG					0xB8 /* TSET: Global para 8th */
-#define TSET_LEN					9
-
-#define TSET_MINUS_OFFSET			0x04
-
-
-#define HBM_INDEX					73
+#define TSET_LEN					2
 
 #define SEQ_TEST_KEY_ON_F0			EA8061V_SEQ_LEVEL2_KEY_UNLOCK_F0
 #define SEQ_TEST_KEY_OFF_F0			EA8061V_SEQ_LEVEL2_KEY_LOCK_F0
-#define SEQ_HBM_OFF					EA8061V_SEQ_HBM
+#define SEQ_TEST_KEY_ON_F1			EA8061V_SEQ_MTP_KEY_UNLOCK_F1
+#define SEQ_TEST_KEY_OFF_F1			EA8061V_SEQ_MTP_KEY_LOCK_F1
 #define SEQ_GAMMA_UPDATE			EA8061V_SEQ_GAMMA_UPDATE_F7
 
 enum {
@@ -212,7 +199,7 @@ enum {
 
 enum {
 	ACL_STATUS_0P,
-	ACL_STATUS_8P,
+	ACL_STATUS_15P,
 	ACL_STATUS_MAX
 };
 
@@ -221,18 +208,5 @@ enum {
 	ACL_OPR_32_FRAME,
 	ACL_OPR_MAX
 };
-
-
-enum {
-	HBM_INTER_OFF = 0,
-	HBM_COLORBLIND_ON,
-	HBM_GALLERY_ON,
-};
-
-// 384 ~ 550
-static const char HBM_INTER_22TH_OFFSET[] = {
-	0x02, 0x04, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06
-};
-
 
 #endif /* __EA8061V_XGA_PARAM_H__ */

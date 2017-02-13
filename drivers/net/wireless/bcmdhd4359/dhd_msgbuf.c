@@ -1804,6 +1804,7 @@ dhd_pktid_map_free(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, uint32 nkey,
 	dhd_pktid_item_t *locker;
 	void * pkt;
 	uint32 flags;
+	unsigned long locker_addr;
 
 	ASSERT(handle != NULL);
 
@@ -1838,6 +1839,15 @@ dhd_pktid_map_free(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, uint32 nkey,
 
 		DHD_ERROR(("%s:%d: Error! Invalid Buffer Free for pktid<%u> \n",
 			__FUNCTION__, __LINE__, nkey));
+#ifdef BCMDMA64OSL
+		PHYSADDRTOULONG(locker->pa, locker_addr);
+#else
+		locker_addr = PHYSADDRLO(locker->pa);
+#endif /* BCMDMA64OSL */
+		DHD_ERROR(("%s:%d: locker->state <%d>, locker->pkttype <%d>,"
+			"pkttype <%d> locker->pa <0x%lx> \n",
+			__FUNCTION__, __LINE__, locker->state, locker->pkttype,
+			pkttype, locker_addr));
 		ASSERT(locker->pkttype == pkttype);
 
 		return NULL;

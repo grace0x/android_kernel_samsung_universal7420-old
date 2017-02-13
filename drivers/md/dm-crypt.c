@@ -37,7 +37,7 @@
 volatile unsigned int disk_key_flag;
 DEFINE_SPINLOCK(disk_key_lock);
 
-#if defined(CONFIG_MMC_DW_FMP_DM_CRYPT) || defined(CONFIG_UFS_FMP_DM_CRYPT)
+#if defined(CONFIG_FIPS_FMP)
 extern int fmp_clear_disk_key(void);
 #endif
 
@@ -1403,7 +1403,9 @@ static int crypt_wipe_key(struct crypt_config *cc)
 
 static void crypt_dtr(struct dm_target *ti)
 {
+#if defined(CONFIG_FIPS_FMP)
 	int r;
+#endif
 	struct crypt_config *cc = ti->private;
 
 	ti->private = NULL;
@@ -1436,6 +1438,14 @@ static void crypt_dtr(struct dm_target *ti)
 		if (cc->iv_gen_ops && cc->iv_gen_ops->dtr)
 			cc->iv_gen_ops->dtr(cc);
 
+#if defined(CONFIG_FIPS_FMP)
+	if (cc->hw_fmp) {
+		r = fmp_clear_disk_key();
+		if (r)
+			pr_err("dm-crypt: Fail to clear FMP disk key.\n");
+	}
+#endif
+
 	if (cc->dev)
 		dm_put_device(ti, cc->dev);
 
@@ -1444,10 +1454,6 @@ static void crypt_dtr(struct dm_target *ti)
 
 	/* Must zero key material before freeing */
 	kzfree(cc);
-
-	r = fmp_clear_disk_key();
-	if (r)
-		pr_err("dm-crypt: Fail to clear FMP disk key.\n");
 }
 
 static int crypt_ctr_cipher(struct dm_target *ti,
@@ -1755,16 +1761,25 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	}
 
 	ret = -ENOMEM;
-	cc->io_queue = alloc_workqueue("kcryptd_io",
-				       WQ_NON_REENTRANT|
-				       WQ_MEM_RECLAIM,
-				       1);
-	if (!cc->io_queue) {
-		ti->error = "Couldn't create kcryptd io queue";
-		goto bad;
-	}
+	if (cc->hw_fmp) {
+		cc->io_queue = alloc_workqueue("kcryptd_fmp_io",
+					       WQ_NON_REENTRANT|
+					       WQ_MEM_RECLAIM,
+					       1);
+		if (!cc->io_queue) {
+			ti->error = "Couldn't create kcryptd fmp io queue";
+			goto bad;
+		}
+	} else {
+		cc->io_queue = alloc_workqueue("kcryptd_io",
+					       WQ_NON_REENTRANT|
+					       WQ_MEM_RECLAIM,
+					       1);
+		if (!cc->io_queue) {
+			ti->error = "Couldn't create kcryptd io queue";
+			goto bad;
+		}
 
-	if (cc->hw_fmp == 0) {
 		cc->crypt_queue = alloc_workqueue("kcryptd",
 					  WQ_NON_REENTRANT|
 					  WQ_CPU_INTENSIVE|
@@ -1806,7 +1821,11 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 	io = crypt_io_alloc(cc, bio, dm_target_offset(ti, bio->bi_sector));
 
 	if (cc->hw_fmp == 1)
-		kcryptd_queue_io(io);
+		if (bio_data_dir(io->base_bio) == READ) {
+			if (kcryptd_io_rw(io, GFP_NOWAIT))
+				kcryptd_queue_io(io);
+		} else
+			kcryptd_queue_io(io);
 	else {
 		if (bio_data_dir(io->base_bio) == READ) {
 			if (kcryptd_io_read(io, GFP_NOWAIT))

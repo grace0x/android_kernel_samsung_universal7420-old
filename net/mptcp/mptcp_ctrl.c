@@ -1864,7 +1864,7 @@ int mptcp_doit(struct sock *sk)
 	if (mptcp_init_failed)
 		return 0;
 
-	if (sysctl_mptcp_enabled == MPTCP_APP && !tcp_sk(sk)->mptcp_enabled)
+	if (!sysctl_mptcp_enabled)
 		return 0;
 
 	/* Socket may already be established (e.g., called from tcp_recvmsg) */

@@ -13,6 +13,8 @@
 #ifndef __SOUND_MAX98505_PDATA_H__
 #define __SOUND_MAX98505_PDATA_H__
 
+#include <sound/maxim_dsm.h>
+
 #define MAX98505_I2C_ADDRESS	(0x62 >> 1)
 
 struct max98505_dsp_cfg {
@@ -42,6 +44,12 @@ struct max98505_dsp_cfg {
 #define MAX98505_VSTEP_15		15
 #define MAX98505_VSTEP_MAX		MAX98505_VSTEP_15
 
+#ifdef CONFIG_SND_SOC_MAXIM_DSM_CAL
+extern struct class *g_class;
+#else
+struct class *g_class;
+#endif /* CONFIG_SND_SOC_MAXIM_DSM_CAL */
+
 struct max98505_volume_step_info {
 	int length;
 	int vol_step;
@@ -55,7 +63,11 @@ struct max98505_volume_step_info {
  * This definition should be changed,
  * if platform_info of device tree is changed.
  */
+#ifdef CONFIG_SND_SOC_MAXIM_DSM
+#define MAX98505_PINFO_SZ	PARAM_OFFSET_MAX
+#else
 #define MAX98505_PINFO_SZ	6
+#endif /* CONFIG_SND_SOC_MAXIM_DSM */
 
 struct max98505_pdata {
 	int sysclk;
@@ -69,5 +81,11 @@ struct max98505_pdata {
 #endif
 	uint32_t pinfo[MAX98505_PINFO_SZ];
 	struct max98505_volume_step_info vstep;
+	const uint32_t *reg_arr;
+	uint32_t reg_arr_len;
+	int sub_reg;
+	bool nodsm;
 };
+
+void max98505_spk_enable(int enable);
 #endif

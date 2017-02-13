@@ -24,6 +24,7 @@
 #include <mali_kbase.h>
 #include <mali_midg_regmap.h>
 #include <mali_kbase_instr.h>
+#include <linux/freezer.h>
 
 
 /**
@@ -209,7 +210,7 @@ void kbase_destroy_context(struct kbase_context *kctx)
 	}
 
 	/* MALI_SEC_INTEGRATION */
-	while (wait_event_timeout(kbdev->pm.suspending_wait, kbdev->pm.suspending == false, (unsigned int) msecs_to_jiffies(1000)) == 0)
+	while (wait_event_freezable_timeout(kbdev->pm.suspending_wait, kbdev->pm.suspending == false, (unsigned int) msecs_to_jiffies(1000)) == 0)
 		printk("[G3D] Waiting for resuming the device\n");
 
 	KBASE_TRACE_ADD(kbdev, CORE_CTX_DESTROY, kctx, NULL, 0u, 0u);

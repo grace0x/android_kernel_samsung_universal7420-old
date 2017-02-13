@@ -3339,7 +3339,7 @@ static int smsc9500_bind(struct usbnet *dev, struct usb_interface *intf)
 	netif_carrier_off(dev->net);
 
 #ifdef CONFIG_USB_NOTIFY_LAYER
-	register_ovc_func(smsc9500_ovc_gpio_check, dev);
+	register_ovc_func(o_notify,smsc9500_ovc_gpio_check, dev);
 	send_otg_notify(o_notify, NOTIFY_EVENT_SMSC_OVC, 1);
 #endif	
 

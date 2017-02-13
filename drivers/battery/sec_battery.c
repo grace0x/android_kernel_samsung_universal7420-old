@@ -45,6 +45,7 @@ static struct device_attribute sec_battery_attrs[] = {
 	SEC_BATTERY_ATTR(batt_vol_adc_aver),
 	SEC_BATTERY_ATTR(batt_current_ua_now),
 	SEC_BATTERY_ATTR(batt_current_ua_avg),
+	SEC_BATTERY_ATTR(batt_filter_cfg),
 	SEC_BATTERY_ATTR(batt_temp),
 	SEC_BATTERY_ATTR(batt_temp_adc),
 	SEC_BATTERY_ATTR(batt_temp_aver),
@@ -1551,7 +1552,7 @@ static void sec_bat_chg_temperature_check(
 	if (battery->skip_chg_temp_check || battery->skip_wpc_temp_check)
 		return;
 
-	if (battery->siop_level >= 100 &&
+	if (battery->siop_level >= 100 && (battery->mix_limit == SEC_BATTERY_MIX_TEMP_NONE) &&
 			((battery->cable_type == POWER_SUPPLY_TYPE_HV_MAINS) ||
 			 (battery->cable_type == POWER_SUPPLY_TYPE_HV_ERR))) {
 		union power_supply_propval value;
@@ -1684,6 +1685,76 @@ static void sec_bat_chg_temperature_check(
 	} else if (battery->pad_limit != SEC_BATTERY_WPC_TEMP_NONE) {
 		battery->pad_limit = SEC_BATTERY_WPC_TEMP_NONE;
 #endif
+	}
+}
+
+static void sec_bat_mix_temperature_check(
+	struct sec_battery_info *battery) {
+	union power_supply_propval value;
+	int mix_high_tbat, mix_high_tchg, mix_high_tbat_recov;
+	unsigned int mix_input_limit_current;
+
+	if (battery->skip_chg_temp_check)
+		return;
+
+	if ((battery->cable_type == POWER_SUPPLY_TYPE_HV_MAINS) ||
+		(battery->cable_type == POWER_SUPPLY_TYPE_HV_ERR) ||
+		(battery->cable_type == POWER_SUPPLY_TYPE_MAINS)) {
+
+		if ((battery->cable_type == POWER_SUPPLY_TYPE_HV_MAINS) ||
+			(battery->cable_type == POWER_SUPPLY_TYPE_HV_ERR)) {
+			mix_high_tbat = battery->pdata->mix_high_tbat_hv;
+			mix_high_tchg = battery->pdata->mix_high_tchg_hv;
+			mix_high_tbat_recov = battery->pdata->mix_high_tbat_recov_hv;
+			mix_input_limit_current = battery->pdata->mix_input_limit_current_hv;
+		} else {
+			mix_high_tbat = battery->pdata->mix_high_tbat;
+			mix_high_tchg = battery->pdata->mix_high_tchg;
+			mix_high_tbat_recov = battery->pdata->mix_high_tbat_recov;
+			mix_input_limit_current = battery->pdata->mix_input_limit_current;
+		}
+
+		if (battery->siop_level >= 100) {
+			if ((battery->mix_limit == SEC_BATTERY_MIX_TEMP_NONE) &&
+				(battery->temperature >= mix_high_tbat) &&
+				(battery->chg_temp >= mix_high_tchg)) {
+				battery->mix_limit = SEC_BATTERY_MIX_TEMP_HIGH;
+				value.intval = mix_input_limit_current;
+				psy_do_property(battery->pdata->charger_name, set,
+						POWER_SUPPLY_PROP_CURRENT_MAX, value);
+				dev_info(battery->dev,"%s: Input current is reduced by Temp(tbat:%d, tchg:%d)\n",
+						__func__, battery->temperature, battery->chg_temp);
+			} else if ((battery->mix_limit != SEC_BATTERY_MIX_TEMP_NONE) &&
+					(battery->temperature < mix_high_tbat_recov)) {
+				battery->mix_limit = SEC_BATTERY_MIX_TEMP_NONE;
+				value.intval = battery->pdata->charging_current
+						[battery->cable_type].input_current_limit;
+				psy_do_property(battery->pdata->charger_name, set,
+						POWER_SUPPLY_PROP_CURRENT_MAX, value);
+				dev_info(battery->dev,"%s: Input current is recovered by Temp(tbat:%d)\n",
+						__func__, battery->temperature);
+			}
+		} else {
+			psy_do_property(battery->pdata->charger_name, get,
+					POWER_SUPPLY_PROP_CURRENT_MAX, value);
+			if (value.intval == mix_input_limit_current) {
+				battery->mix_limit = SEC_BATTERY_MIX_TEMP_NONE;
+				battery->chg_limit = SEC_BATTERY_CHG_TEMP_NONE;
+
+				value.intval = battery->pdata->charging_current
+					[battery->cable_type].input_current_limit;
+				psy_do_property(battery->pdata->charger_name, set,
+						POWER_SUPPLY_PROP_CURRENT_MAX, value);
+
+				value.intval = battery->siop_level;
+				psy_do_property(battery->pdata->charger_name, set,
+						POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, value);
+
+				dev_info(battery->dev,"%s: Input current is recovered\n", __func__);
+			}
+		}
+	} else if (battery->mix_limit != SEC_BATTERY_MIX_TEMP_NONE) {
+		battery->mix_limit = SEC_BATTERY_MIX_TEMP_NONE;
 	}
 }
 #endif
@@ -2989,7 +3060,10 @@ static void sec_bat_siop_work(struct work_struct *work)
 #endif
 
 #if !defined(CONFIG_SEC_FACTORY)
-	if ( (battery->pdata->chg_temp_check | battery->pdata->wpc_temp_check) && battery->siop_level >= 100)
+	if (battery->pdata->mix_temp_check)
+		sec_bat_mix_temperature_check(battery);
+
+	if ((battery->pdata->chg_temp_check || battery->pdata->wpc_temp_check) && battery->siop_level >= 100)
 		sec_bat_chg_temperature_check(battery);
 #endif
 
@@ -3241,8 +3315,12 @@ static void sec_bat_monitor_work(
 		battery->pdata->monitor_additional_check();
 
 #if !defined(CONFIG_SEC_FACTORY)
-	/* 7. charger temperature check */
-	if (battery->pdata->chg_temp_check | battery->pdata->wpc_temp_check)
+	/* 7. battery temperature check */
+	if (battery->pdata->mix_temp_check)
+		sec_bat_mix_temperature_check(battery);
+
+	/* 8. charger temperature check */
+	if (battery->pdata->chg_temp_check || battery->pdata->wpc_temp_check)
 		sec_bat_chg_temperature_check(battery);
 #endif
 
@@ -3641,6 +3719,17 @@ ssize_t sec_bat_show_attrs(struct device *dev,
 		}
 		break;
 
+	case BATT_FILTER_CFG:
+		{
+			union power_supply_propval value;
+
+			psy_do_property(battery->pdata->fuelgauge_name, get,
+				POWER_SUPPLY_PROP_FILTER_CFG, value);
+
+			i += scnprintf(buf + i, PAGE_SIZE - i, "%x\n",
+				value.intval);
+		}
+		break;
 	case BATT_TEMP:
 		switch (battery->pdata->thermal_source) {
 		case SEC_BATTERY_THERMAL_SOURCE_FG:
@@ -4341,6 +4430,16 @@ ssize_t sec_bat_store_attrs(
 		break;
 	case BATT_CURRENT_UA_AVG:
 		break;
+	case BATT_FILTER_CFG:
+		if (sscanf(buf, "%d\n", &x) == 1) {
+			union power_supply_propval value;
+			value.intval = x;
+			psy_do_property(battery->pdata->fuelgauge_name, set,
+					POWER_SUPPLY_PROP_FILTER_CFG, value);
+			ret = count;
+		}
+
+		break;
 	case BATT_TEMP:
 		break;
 	case BATT_TEMP_ADC:
@@ -4386,6 +4485,7 @@ ssize_t sec_bat_store_attrs(
 			dev_info(battery->dev,
 					"%s: siop level: %d\n", __func__, x);
 			battery->chg_limit = SEC_BATTERY_CHG_TEMP_NONE;
+			battery->mix_limit = SEC_BATTERY_MIX_TEMP_NONE;
 
 #if defined(CONFIG_WIRELESS_CHARGER_HIGH_VOLTAGE)
 			wpc_temp_mode = false;
@@ -5024,9 +5124,9 @@ ssize_t sec_bat_store_attrs(
 			pr_err("%s: x : %d\n", __func__, x);
 
 			if (x == 1) {
-				ret = set_param(CM_OFFSET, '1');
+				ret = sec_set_param(CM_OFFSET, '1');
 				if (ret < 0) {
-					pr_err("%s:set_param failed\n", __func__);
+					pr_err("%s:sec_set_param failed\n", __func__);
 					return ret;
 				}
 				else {
@@ -5057,9 +5157,9 @@ ssize_t sec_bat_store_attrs(
 					}
 				}
 			} else if (x == 2) {
-				ret = set_param(CM_OFFSET, '0');
+				ret = sec_set_param(CM_OFFSET, '0');
 				if (ret < 0) {
-					pr_err("%s: set_param failed\n", __func__);
+					pr_err("%s: sec_set_param failed\n", __func__);
 					return ret;
 				}
 				else {
@@ -6508,6 +6608,69 @@ static int sec_bat_parse_dt(struct device *dev,
 			pr_info("%s : wpc_lcd_on_high_temp_rec is Empty\n", __func__);
 	}
 
+	ret = of_property_read_u32(np, "battery,mix_temp_check",
+		&pdata->mix_temp_check);
+	if (ret)
+		pr_info("%s : mix_temp_check is Empty\n", __func__);
+
+	if (pdata->mix_temp_check) {
+		ret = of_property_read_u32(np, "battery,mix_high_tbat",
+			&pdata->mix_high_tbat);
+		if (ret) {
+			pdata->mix_high_tbat = 999;
+			pr_info("%s : bat_high_temp is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_high_tchg",
+			&pdata->mix_high_tchg);
+		if (ret) {
+			pdata->mix_high_tchg = 999;
+			pr_info("%s : mix_high_tchg is Empty\n", __func__);
+		}		
+
+		ret = of_property_read_u32(np, "battery,mix_high_tbat_recov",
+			&pdata->mix_high_tbat_recov);
+		if (ret) {
+			pdata->mix_high_tbat_recov = 999;
+			pr_info("%s : mix_high_tbat_recov is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_input_limit_current",
+			&pdata->mix_input_limit_current);
+		if (ret) {
+			pdata->mix_input_limit_current = 1800;
+			pr_info("%s : mix_input_limit_current is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_high_tbat_hv",
+			&pdata->mix_high_tbat_hv);
+		if (ret) {
+			pdata->mix_high_tbat_hv = 999;
+			pr_info("%s : bat_high_temp_hv is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_high_tchg_hv",
+			&pdata->mix_high_tchg_hv);
+		if (ret) {
+			pdata->mix_high_tchg_hv = 999;
+			pr_info("%s : mix_high_tchg_hv is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_high_tbat_recov_hv",
+			&pdata->mix_high_tbat_recov_hv);
+		if (ret) {
+			pdata->mix_high_tbat_recov_hv = 999;
+			pr_info("%s : mix_high_tbat_recov_hv is Empty\n", __func__);
+		}
+
+		ret = of_property_read_u32(np, "battery,mix_input_limit_current_hv",
+			&pdata->mix_input_limit_current_hv);
+		if (ret) {
+			pdata->mix_input_limit_current_hv = 1667;
+			pr_info("%s : mix_input_limit_current_hv is Empty\n", __func__);
+		}
+	}
+
 #if defined(CONFIG_WIRELESS_CHARGER_INBATTERY)
 	pdata->wpc_delayed_current_en = of_property_read_bool(np,
 					   "battery,wpc_delayed_current_en");
@@ -7197,6 +7360,7 @@ static int __devinit sec_battery_probe(struct platform_device *pdev)
 	battery->charging_block = false;
 	battery->chg_limit = SEC_BATTERY_CHG_TEMP_NONE;
 	battery->pad_limit = SEC_BATTERY_WPC_TEMP_NONE;
+	battery->mix_limit = SEC_BATTERY_MIX_TEMP_NONE;
 
 #if defined(ANDROID_ALARM_ACTIVATED)
 	alarm_init(&battery->event_termination_alarm,
@@ -7442,6 +7606,12 @@ static int __devinit sec_battery_probe(struct platform_device *pdev)
 			"%s : Failed to create_attrs\n", __func__);
 		goto err_req_irq;
 	}
+
+	/* initialize battery level*/
+	value.intval = 0;
+	psy_do_property(battery->pdata->fuelgauge_name, get,
+			POWER_SUPPLY_PROP_CAPACITY, value);
+	battery->capacity = value.intval;
 
 #if defined(CONFIG_WIRELESS_FIRMWARE_UPDATE)
 	queue_delayed_work_on(0, battery->monitor_wqueue, &battery->fw_init_work, 0);

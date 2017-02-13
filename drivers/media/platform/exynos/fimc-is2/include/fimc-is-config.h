@@ -18,6 +18,8 @@
 #include "../vendor/fimc-is-vendor-config_noble.h"
 #elif defined(CONFIG_CAMERA_ROYCE)
 #include "../vendor/fimc-is-vendor-config_royce.h"
+#elif defined(CONFIG_CAMERA_A8XE)
+#include "../vendor/fimc-is-vendor-config_a8xe.h"
 #endif
 
 /*

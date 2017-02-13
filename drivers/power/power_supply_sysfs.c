@@ -50,7 +50,14 @@ static ssize_t power_supply_show_property(struct device *dev,
 		"MHL_500", "MHL_900", "MHL_1500", "MHL_USB",
 		"SMART_OTG", "SMART_NOTG", "POWER_SHARING",
 		"HV_Mains", "HV_Prepare_Mains", "HV_ERR", "MHL_USB_100", "MHL_2000",
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+		"HV_Unknown", "MDOCK_TA", "HMT_CONNECTED", "HMT_CHARGE",
+		"HV_Mains_12V",  "Wireless_Pack", "Wireless_Pack_TA",
+		"Wireless_Stand", "HV_Wireless_Stand", "PDIC", "HV_Mains_CHG_LIMIT",
+		"HV_QC20", "HV_QC30"
+#else
 		"HV_Unknown", "MDOCK_TA", "HMT_CONNECTED", "HMT_CHARGE"
+#endif
 	};
 	static char *status_text[] = {
 		"Unknown", "Charging", "Discharging", "Not charging", "Full"
@@ -60,8 +67,11 @@ static ssize_t power_supply_show_property(struct device *dev,
 	};
 	static char *health_text[] = {
 		"Unknown", "Good", "Overheat", "Warm", "Dead", "Over voltage",
-		"Unspecified failure", "Cold", "Cool", "Under voltage", 
-		"OverheatLimit"
+		"Unspecified failure", "Cold", "Cool",
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+		"Watchdog timer expire", "Safety timer expire",
+#endif
+		"Under voltage", "OverheatLimit"
 	};
 	static char *technology_text[] = {
 		"Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd",
@@ -165,6 +175,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(current_avg),
 	POWER_SUPPLY_ATTR(power_now),
 	POWER_SUPPLY_ATTR(power_avg),
+	POWER_SUPPLY_ATTR(filter_cfg),
 	POWER_SUPPLY_ATTR(charge_full_design),
 	POWER_SUPPLY_ATTR(charge_empty_design),
 	POWER_SUPPLY_ATTR(charge_full),
@@ -217,6 +228,11 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(serial_number),
 	POWER_SUPPLY_ATTR(afc_charger_mode),
 	POWER_SUPPLY_ATTR(usb_hc),
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+	POWER_SUPPLY_ATTR(current_full),
+	POWER_SUPPLY_ATTR(power_design),
+	POWER_SUPPLY_ATTR(charge_uno_control),
+#endif
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(charge_aicl_control),
 };

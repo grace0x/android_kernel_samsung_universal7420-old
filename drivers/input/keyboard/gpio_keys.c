@@ -58,6 +58,10 @@ bool wakeup_by_key(void) {
 }
 EXPORT_SYMBOL(wakeup_by_key);
 
+#if defined(CONFIG_FB) && defined(CONFIG_SENSORS_VFS7XXX)
+extern void vfsspi_fp_homekey_ev(void);
+#endif
+
 struct gpio_button_data {
 	struct gpio_keys_button *button;
 	struct input_dev *input;
@@ -464,6 +468,10 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	} else {
 		bdata->key_state = !!state;
 		input_event(input, type, button->code, !!state);
+#if defined(CONFIG_FB) && defined(CONFIG_SENSORS_VFS7XXX)
+		if(button->code == KEY_HOMEPAGE && !!state == 1)
+			vfsspi_fp_homekey_ev();
+#endif
 	}
 
 	input_sync(input);

@@ -413,6 +413,8 @@ void mmc_of_parse(struct mmc_host *host)
 		host->pm_caps |= MMC_PM_KEEP_POWER;
 	if (of_find_property(np, "enable-sdio-wakeup", &len))
 		host->pm_caps |= MMC_PM_WAKE_SDIO_IRQ;
+	if (of_find_property(np, "skip-init-mmc-scan", NULL))
+		host->caps2 |= MMC_CAP2_SKIP_INIT_SCAN;
 }
 
 EXPORT_SYMBOL(mmc_of_parse);

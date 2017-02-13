@@ -70,7 +70,8 @@ enum {
 #define OLED_CMD_GAMMA_CNT		34
 #define OLED_CMD_GAMMA			0xCA
 
-#define MAX_BR_INFO				62
+#define MAX_BR_INFO				63
+#define MAX_AID_BR_STEP			62
 
 
 static const unsigned int vref_index[NUM_VREF] = {
@@ -623,7 +624,7 @@ static const unsigned int gamma_multi_tbl [256] = {
 
 
 /* lookup for 2.2 gamma */
-static const unsigned char lookup_tbl [361] = { // lihh TBD
+static const unsigned char lookup_tbl [361] = { // Grayscale table
 	0, 		18, 	24, 	29, 	33, 	36, 	40, 	43,
 	45, 	48, 	50, 	52, 	54, 	56, 	58, 	60,
 	62, 	64, 	65, 	67, 	69, 	70, 	72, 	73,
