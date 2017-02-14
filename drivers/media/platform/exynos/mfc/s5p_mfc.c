@@ -1769,6 +1769,18 @@ static irqreturn_t s5p_mfc_irq(int irq, void *priv)
 	case S5P_FIMV_R2H_CMD_COMPLETE_SEQ_RET:
 	case S5P_FIMV_R2H_CMD_ENC_BUFFER_FULL_RET:
 		if (ctx->type == MFCINST_DECODER) {
+			if (ctx->state == MFCINST_SPECIAL_PARSING_NAL) {
+				s5p_mfc_clear_int_flags();
+				spin_lock_irq(&dev->condlock);
+				clear_bit(ctx->num, &dev->ctx_work_bits);
+				spin_unlock_irq(&dev->condlock);
+				ctx->state =  MFCINST_RUNNING;
+				if (clear_hw_bit(ctx) == 0)
+					BUG();
+				s5p_mfc_clock_off(dev);
+				wake_up_ctx(ctx, reason, err);
+				goto done;
+			}
 			s5p_mfc_handle_frame(ctx, reason, err);
 		} else if (ctx->type == MFCINST_ENCODER) {
 			if (reason == S5P_FIMV_R2H_CMD_SLICE_DONE_RET) {
@@ -2426,18 +2438,22 @@ static int s5p_mfc_release(struct file *file)
 	mfc_info_ctx("MFC driver release is called [%d:%d], is_drm(%d)\n",
 			dev->num_drm_inst, dev->num_inst, ctx->is_drm);
 
-	if (need_to_wait_frame_start(ctx)) {
-		ctx->state = MFCINST_ABORT;
-		if (s5p_mfc_wait_for_done_ctx(ctx,
-				S5P_FIMV_R2H_CMD_FRAME_DONE_RET))
-			s5p_mfc_cleanup_timeout(ctx);
-	}
+	spin_lock_irq(&dev->condlock);
+	set_bit(ctx->num, &dev->ctx_stop_bits);
+	clear_bit(ctx->num, &dev->ctx_work_bits);
+	spin_unlock_irq(&dev->condlock);
 
+	/* If a H/W operation is in progress, wait for it complete */
 	if (need_to_wait_nal_abort(ctx)) {
-		ctx->state = MFCINST_ABORT;
 		if (s5p_mfc_wait_for_done_ctx(ctx,
 				S5P_FIMV_R2H_CMD_NAL_ABORT_RET))
 			s5p_mfc_cleanup_timeout(ctx);
+	} else if (test_bit(ctx->num, &dev->hw_lock)) {
+		ret = wait_event_timeout(ctx->queue,
+				(test_bit(ctx->num, &dev->hw_lock) == 0),
+				msecs_to_jiffies(MFC_INT_TIMEOUT));
+		if (ret == 0)
+			mfc_err_ctx("wait for event failed\n");
 	}
 
 	if (ctx->type == MFCINST_ENCODER) {
@@ -2445,7 +2461,8 @@ static int s5p_mfc_release(struct file *file)
 		if (!enc) {
 			mfc_err_ctx("no mfc encoder to run\n");
 			mutex_unlock(&dev->mfc_mutex);
-			return -EINVAL;
+			ret = -EINVAL;
+			goto err_release;
 		}
 
 		if (enc->in_slice || enc->buf_full) {
@@ -2502,9 +2519,14 @@ static int s5p_mfc_release(struct file *file)
 	if (!atomic_read(&dev->watchdog_run) &&
 		(ctx->inst_no != MFC_NO_INSTANCE_SET)) {
 		/* Wait for hw_lock == 0 for this context */
-		wait_event_timeout(ctx->queue,
+		ret = wait_event_timeout(ctx->queue,
 				(test_bit(ctx->num, &dev->hw_lock) == 0),
 				msecs_to_jiffies(MFC_INT_SHORT_TIMEOUT));
+		if (ret == 0) {
+			mfc_err_ctx("Waiting for hardware to finish timed out\n");
+			ret = -EBUSY;
+			goto err_release;
+		}
 
 		ctx->state = MFCINST_RETURN_INST;
 		spin_lock_irq(&dev->condlock);
@@ -2512,7 +2534,6 @@ static int s5p_mfc_release(struct file *file)
 		spin_unlock_irq(&dev->condlock);
 
 		/* To issue the command 'CLOSE_INSTANCE' */
-		s5p_mfc_clean_ctx_int_flags(ctx);
 		s5p_mfc_try_run(dev);
 
 		/* Wait until instance is returned or timeout occured */
@@ -2569,7 +2590,8 @@ static int s5p_mfc_release(struct file *file)
 
 				mutex_unlock(&dev->mfc_mutex);
 
-				return -EIO;
+				ret = -EIO;
+				goto err_release;
 			}
 		}
 
@@ -2630,6 +2652,11 @@ static int s5p_mfc_release(struct file *file)
 		enc_cleanup_user_shared_handle(ctx);
 		kfree(ctx->enc_priv);
 	}
+
+	spin_lock_irq(&dev->condlock);
+	clear_bit(ctx->num, &dev->ctx_stop_bits);
+	spin_unlock_irq(&dev->condlock);
+
 	dev->ctx[ctx->num] = 0;
 	kfree(ctx);
 
@@ -2639,6 +2666,15 @@ static int s5p_mfc_release(struct file *file)
 	mutex_unlock(&dev->mfc_mutex);
 
 	return 0;
+
+err_release:
+	spin_lock_irq(&dev->condlock);
+	clear_bit(ctx->num, &dev->ctx_stop_bits);
+	spin_unlock_irq(&dev->condlock);
+
+	mutex_unlock(&dev->mfc_mutex);
+
+	return ret;
 }
 
 /* Poll */
