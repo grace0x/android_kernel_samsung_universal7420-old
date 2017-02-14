@@ -1151,6 +1151,9 @@ static int dsim_enable(struct dsim_device *dsim)
 #ifdef CONFIG_LCD_DOZE_MODE
 		if ((dsim->dsim_doze == DSIM_DOZE_STATE_DOZE) ||
 			(dsim->dsim_doze == DSIM_DOZE_STATE_DOZE_SUSPEND)) {
+			if( regulator_set_voltage(dsim->res.regulator_16V, 1600000, 1600000) == 0 )
+				dsim_info( "%s : vddr to 1.6v successed\n", __func__ );
+			else dsim_err( "%s : vddr to 1.6v failed\n", __func__ );
 			call_panel_ops(dsim, exitalpm, dsim);
 		}
 #endif
@@ -1205,6 +1208,9 @@ static int dsim_enable(struct dsim_device *dsim)
 #ifdef CONFIG_LCD_DOZE_MODE
 	if ((dsim->dsim_doze == DSIM_DOZE_STATE_DOZE) ||
 		(dsim->dsim_doze == DSIM_DOZE_STATE_DOZE_SUSPEND)) {
+		if( regulator_set_voltage(dsim->res.regulator_16V, 1600000, 1600000) == 0 )
+			dsim_info( "%s : vddr to 1.6v successed\n", __func__ );
+		else dsim_err( "%s : vddr to 1.6v failed\n", __func__ );
 		call_panel_ops(dsim, exitalpm, dsim);
 	} else {
 		call_panel_ops(dsim, displayon, dsim);
@@ -1313,6 +1319,9 @@ static int dsim_doze_enable(struct dsim_device *dsim)
 #endif
 
 	if (dsim->dsim_doze == DSIM_DOZE_STATE_SUSPEND) {
+		if( regulator_set_voltage(dsim->res.regulator_16V, 1500000, 1500000) == 0 )
+			dsim_info( "%s : vddr to 1.5v successed\n", __func__ );
+		else dsim_err( "%s : vddr to 1.5v failed\n", __func__ );
 		dsim_set_panel_power(dsim, 1);
 	}
 
