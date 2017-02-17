@@ -279,7 +279,7 @@ static  unsigned char HA3_elv17[3] = {
         0xB5, 0xAC, 0x05
 };
 static  unsigned char HA3_elv18[3] = {
-        0xB5, 0xAC, 0x04
+        0xB5, 0xAC, 0x0A
 };
 
 
@@ -335,7 +335,7 @@ static  unsigned char HA3_elvCaps17[3] = {
         0xB5, 0xBC, 0x05
 };
 static  unsigned char HA3_elvCaps18[3] = {
-        0xB5, 0xBC, 0x04
+        0xB5, 0xBC, 0x0A
 };
 
 
@@ -687,7 +687,7 @@ static  unsigned char HF3_elv17[3] = {
         0xB5, 0xAC, 0x05
 };
 static  unsigned char HF3_elv18[3] = {
-        0xB5, 0xAC, 0x04
+        0xB5, 0xAC, 0x0A
 };
 
 
@@ -743,7 +743,7 @@ static  unsigned char HF3_elvCaps17[3] = {
         0xB5, 0xBC, 0x05
 };
 static  unsigned char HF3_elvCaps18[3] = {
-        0xB5, 0xBC, 0x04
+        0xB5, 0xBC, 0x0A
 };
 
 /////////////// rev.d	///////////////

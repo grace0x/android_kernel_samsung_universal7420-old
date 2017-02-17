@@ -59,14 +59,14 @@ enum
         HBM_STATUS_MAX,
 };
 
-enum 
+enum
 {
 	ACL_STATUS_OFF,
 	ACL_STATUS_ON,
 	ACL_STATUS_MAX
 };
 
-enum 
+enum
 {
 	ACL_OPR_OFF,
 	ACL_OPR_8P,

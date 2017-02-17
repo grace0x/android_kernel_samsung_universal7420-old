@@ -181,7 +181,9 @@ struct panel_private {
 	unsigned int adaptive_control;
 	struct class *mdnie_class;
 	int lux;
-
+#ifdef CONFIG_CHECK_OCTA_CHIP_ID
+	unsigned char octa_id[25];
+#endif
 };
 
 struct dsim_panel_ops {
@@ -280,7 +282,6 @@ void dsim_pkt_go_enable(struct dsim_device *dsim, bool enable);
 #define ALPM_ON					1
 int alpm_set_mode(struct dsim_device *dsim, int enable);
 #endif
-
 
 static inline struct dsim_device *get_dsim_drvdata(u32 id)
 {

@@ -92,11 +92,9 @@ static struct mdnie_table *mdnie_find_table(struct mdnie_info *mdnie)
 	} else if (IS_NIGHT_MODE(mdnie->night_mode)) {
 		table = mdnie->tune->night_table ? &mdnie->tune->night_table[NIGHT_MODE_ON] : NULL;
 		goto exit;
-#if defined(CONFIG_TDMB)
 	} else if (IS_DMB(mdnie->scenario)) {
 		table = mdnie->tune->dmb_table ? &mdnie->tune->dmb_table[mdnie->mode] : NULL;
 		goto exit;
-#endif
 	} else if (IS_SCENARIO(mdnie->scenario)) {
 		table = mdnie->tune->main_table ? &mdnie->tune->main_table[mdnie->scenario][mdnie->mode] : NULL;
 		goto exit;
@@ -124,7 +122,6 @@ static void mdnie_update_sequence(struct mdnie_info *mdnie, struct mdnie_table *
 		mdnie_request_table(mdnie->path, table);
 
 	mdnie_write_table(mdnie, table);
-	return;
 }
 
 static void mdnie_update(struct mdnie_info *mdnie)
@@ -146,7 +143,6 @@ static void mdnie_update(struct mdnie_info *mdnie)
 		mdnie->white_g = table->seq[scr_info->index].cmd[scr_info->white_g];
 		mdnie->white_b = table->seq[scr_info->index].cmd[scr_info->white_b];
 	}
-	return;
 }
 
 static void update_color_position(struct mdnie_info *mdnie, unsigned int idx)
@@ -418,7 +414,7 @@ static ssize_t color_correct_show(struct device *dev,
 
 	idx = get_panel_coordinate(mdnie, result);
 
-	for (i = 1; i < (int)ARRAY_SIZE(result); i++)
+	for (i = 1; i < ARRAY_SIZE(result); i++)
 		pos += sprintf(pos, "f%d: %d, ", i, result[i]);
 	pos += sprintf(pos, "tune%d\n", idx);
 
@@ -655,7 +651,7 @@ static ssize_t night_mode_store(struct device *dev,
 
 	return count;
 }
-#ifdef CONFIG_LCD_BURNIN_CORRECTION
+
 static ssize_t mdnie_ldu_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -674,7 +670,7 @@ static ssize_t mdnie_ldu_store(struct device *dev,
 	int ret;
 	struct mdnie_scr_info *scr_info = mdnie->tune->scr_info;
 
-	ret = sscanf(buf, "%d", &idx);
+	ret = kstrtoint(buf, 10, &idx);
 	if (ret < 0)
 		return ret;
 
@@ -706,7 +702,6 @@ static ssize_t mdnie_ldu_store(struct device *dev,
 
 	return count;
 }
-#endif
 
 #ifdef CONFIG_LCD_HMT
 static ssize_t hmtColorTemp_show(struct device *dev,
@@ -751,9 +746,7 @@ static struct device_attribute mdnie_attributes[] = {
 	__ATTR(mdnie, 0444, mdnie_show, NULL),
 	__ATTR(sensorRGB, 0664, sensorRGB_show, sensorRGB_store),
 	__ATTR(night_mode, 0664, night_mode_show, night_mode_store),
-#ifdef CONFIG_LCD_BURNIN_CORRECTION
 	__ATTR(mdnie_ldu, 0664, mdnie_ldu_show, mdnie_ldu_store),
-#endif
 #ifdef CONFIG_LCD_HMT
 	__ATTR(hmt_color_temperature, 0664, hmtColorTemp_show, hmtColorTemp_store),
 #endif

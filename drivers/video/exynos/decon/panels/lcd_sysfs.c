@@ -1117,6 +1117,43 @@ static ssize_t accessibility_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_CHECK_OCTA_CHIP_ID
+static ssize_t octa_id_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct panel_private *priv = dev_get_drvdata(dev);
+	int site, rework, poc;
+	char cell_id[16];
+	int i;
+	unsigned char* octa_id;
+
+	octa_id = &(priv->octa_id[1]);
+
+	site = octa_id[0] & 0xf0;
+	site >>= 4;
+	rework = octa_id[0] & 0x0f;
+	poc = octa_id[1] & 0x0f;
+
+	dsim_info("site (%d), rework (%d), poc (%d)\n",
+			site, rework, poc);
+
+	dsim_info("<CELL ID>\n");
+	for(i = 0; i < 16; i++) {
+		cell_id[i] = octa_id[i+4];
+		dsim_info("%x -> %c\n",octa_id[i+4], cell_id[i]);
+	}
+
+	sprintf(buf, "%d%d%d%02x%02x%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n",
+		site, rework, poc, octa_id[2], octa_id[3],
+		cell_id[0], cell_id[1], cell_id[2], cell_id[3],
+		cell_id[4], cell_id[5], cell_id[6], cell_id[7],
+		cell_id[8], cell_id[9], cell_id[10], cell_id[11],
+		cell_id[12], cell_id[13], cell_id[14], cell_id[15]);
+
+	return strlen(buf);
+}
+static DEVICE_ATTR(octa_id, 0444, octa_id_show, NULL);
+#endif
 
 
 static DEVICE_ATTR(accessibility, 0000, accessibility_show, accessibility_store);
@@ -1168,6 +1205,9 @@ static struct attribute *lcd_sysfs_attributes[] = {
 	&dev_attr_ldu.attr,
 #endif
 	&dev_attr_accessibility.attr,
+#ifdef CONFIG_CHECK_OCTA_CHIP_ID
+	&dev_attr_octa_id.attr,
+#endif
 	NULL,
 };
 

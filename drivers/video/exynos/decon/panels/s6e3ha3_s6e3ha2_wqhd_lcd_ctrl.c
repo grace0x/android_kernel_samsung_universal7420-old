@@ -2189,7 +2189,7 @@ exit_err:
 
 static int s6e3ha3_wqhd_init(struct dsim_device *dsim)
 {
-	int     ret = 0;
+	int ret = 0;
 	int cnt;
 	dsim_info("MDD : %s was called\n", __func__);
 
@@ -2769,7 +2769,6 @@ static int s6e3hf3_wqhd_probe(struct dsim_device *dsim)
 	panel->alpm_mode = 0;
 	panel->curr_alpm_mode = 0;
 #endif
-
 
 	dsim_info(" +  : %s\n", __func__);
 

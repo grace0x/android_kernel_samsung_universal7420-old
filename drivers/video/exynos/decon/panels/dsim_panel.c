@@ -315,6 +315,8 @@ static int dsim_panel_exitalpm(struct dsim_device *dsim)
 			return ret;
 		}
 	}
+
+	panel->curr_alpm_mode = ALPM_OFF;
 	return ret;
 }
 #endif
