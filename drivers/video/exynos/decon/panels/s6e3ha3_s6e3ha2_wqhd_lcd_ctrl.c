@@ -2471,9 +2471,9 @@ static int s6e3ha3_wqhd_exitalpm(struct dsim_device *dsim)
 		return ret;
 	}
 
-	ret = dsim_write_hl_data(dsim, SEQ_DISPLAY_ON, ARRAY_SIZE(SEQ_DISPLAY_ON));
+	ret = dsim_write_hl_data(dsim, SEQ_DISPLAY_OFF, ARRAY_SIZE(SEQ_DISPLAY_OFF));
 	if (ret < 0) {
-		dsim_err("%s : fail to write CMD : DISPLAY_ON\n", __func__);
+		dsim_err("%s : fail to write CMD : DISPLAY_OFF\n", __func__);
 	}
 
 	ret = dsim_write_hl_data(dsim, SEQ_TEST_KEY_ON_F0, ARRAY_SIZE(SEQ_TEST_KEY_ON_F0));
