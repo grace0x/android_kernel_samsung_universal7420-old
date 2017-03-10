@@ -967,7 +967,9 @@ static inline bool decon_lpd_enter_cond(struct decon_device *decon)
 #ifdef CONFIG_LCD_HMT
 	&& (!dsim->priv.hmt_on)
 #endif
-
+#if defined(CONFIG_EXYNOS_DECON_MDNIE)
+	&& (!decon->mdnie->hbm)
+#endif
 #ifdef CONFIG_LCD_DOZE_MODE
 	&& (!dsim->dsim_doze)
 #endif

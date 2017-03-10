@@ -371,8 +371,6 @@ static const unsigned char SEQ_HMT_ON3[] = {		/* PASET Setting  */
 	0x00, 0x00, 0x09, 0xFF
 };
 
-static const unsigned char HF2_A2_IRC_off[2] = {0xB8, 0x00};
-
 static const unsigned char SEQ_SELECT_ALPM[] = {
 	0xBB,
 	0xC4
@@ -438,17 +436,7 @@ static const unsigned char SEQ_HMT_AID_REVERSE2[] = {	/* G.Param */
 static const unsigned char SEQ_ALPM2NIT_MODE_ON[] = {
 	0x53, 0x23
 };
-
-static const unsigned char SEQ_NORMAL_MODE_ON[] = {
-	0x53, 0x00
-};
-
-static const unsigned char SEQ_GLOBAL_PARAM_21[] = {
-	0xB0,
-	0x15
-};
 #endif
-
 
 enum {
 	HBM_INTER_OFF = 0,
@@ -495,7 +483,7 @@ static const char HBM_INTER_22TH_OFFSET[IBRIGHTNESS_HBM_MAX][TEMP_MAX] = {
 	[IBRIGHTNESS_491NIT] =				{-0x06,	-0x06,	-0x06},
 	[IBRIGHTNESS_517NIT] =				{-0x06,	-0x06,	-0x06},
 	[IBRIGHTNESS_545NIT] =				{-0x06,	-0x06,	-0x06},
-	[IBRIGHTNESS_600NIT] =				{-0x06,	-0x06,	-0x06}
+	[IBRIGHTNESS_600NIT] =				{0x00,	0x00,	0x00}
 };
 
 #endif /* __S6E3HF2_PARAM_H__ */

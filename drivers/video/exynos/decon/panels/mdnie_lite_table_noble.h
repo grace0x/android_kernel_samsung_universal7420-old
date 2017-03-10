@@ -6898,7 +6898,7 @@ static unsigned char COLOR_BLIND_3[] = {
 
 static unsigned char NIGHT_MODE_1[] = {
 	0xDF,
-	0x30, //linear_on ascr_skin_on strength 0 0 00000
+	0x20, //linear_on ascr_skin_on strength 0 0 00000
 	0x14, //ascr_trans_on ascr_trans_slope 0 0000
 	0x01, //ascr_trans_interval 0000 0000
 	0x67, //ascr_skin_cb

@@ -823,8 +823,6 @@ static const unsigned char S6E3HF3_VINT_TABLE[] = {
 
 #ifdef CONFIG_LCD_DOZE_MODE
 
-static const unsigned char HF3_A3_IRC_off[2] = {0xB8, 0x00};
-
 static const unsigned char SEQ_SELECT_ALPM[] = {
 	0xBB,
 	0xC4

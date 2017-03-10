@@ -1318,7 +1318,7 @@ static int s6e3ha2_wqhd_probe(struct dsim_device *dsim)
 	panel->lcdConnected = PANEL_CONNECTED;
 #if defined(CONFIG_LCD_DOZE_MODE)
 	panel->alpm_support = SUPPORT_30HZALPM; // 0 : unsupport, 1 : 30hz, 2 : 1hz
-	panel->hlpm_support = SUPPORT_30HZALPM;	// 0 : unsupport, 1 : 30hz
+//	panel->hlpm_support = SUPPORT_30HZALPM;	// 0 : unsupport, 1 : 30hz
 	panel->alpm_mode = 0;
 	panel->curr_alpm_mode = 0;
 #endif
@@ -1603,7 +1603,6 @@ int s6e3ha2_wqhd_setalpm(struct dsim_device *dsim, int mode)
 			goto exit_setalpm;
 	}
 
-	dsim_write_hl_data(dsim, HF2_A2_IRC_off, ARRAY_SIZE(HF2_A2_IRC_off));
 	dsim_write_hl_data(dsim, SEQ_GAMMA_UPDATE, ARRAY_SIZE(SEQ_GAMMA_UPDATE));
 	dsim_write_hl_data(dsim, SEQ_GAMMA_UPDATE_L, ARRAY_SIZE(SEQ_GAMMA_UPDATE_L));
 
@@ -1666,7 +1665,7 @@ static int s6e3ha2_wqhd_exitalpm(struct dsim_device *dsim)
 		return ret;
 	}
 
-	ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_DISPLAY_ON, ARRAY_SIZE(S6E3HA2_SEQ_DISPLAY_ON));
+	ret = dsim_write_hl_data(dsim, S6E3HA2_SEQ_DISPLAY_OFF, ARRAY_SIZE(S6E3HA2_SEQ_DISPLAY_ON));
 	if (ret < 0) {
 		dsim_err("%s : fail to write CMD : DISPLAY_ON\n", __func__);
 	}
