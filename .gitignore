@@ -31,7 +31,6 @@ Module.symvers
 /vmlinuz
 /System.map
 /Module.markers
-/build_kernel
 !.gitignore
 !.mailmap
 include/config
@@ -54,5 +53,4 @@ signing_key.priv
 signing_key.x509
 x509.genkey
 all.config
-build_kernel.sh
 env_setup.sh
